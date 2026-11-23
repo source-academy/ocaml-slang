@@ -52,25 +52,29 @@ checker is never ours to maintain.
 | Repository | `source-academy/ocaml-slang`, public: the OCaml build (dune), the TypeScript conductor wrapper, tests, and deployment of the evaluators to GitHub Pages. |
 | Libraries | `Stdlib` and MenhirLib are preloaded. No `Unix` and no `Thread`. Others (`Str`) are added on request. |
 | Menhir back-end | `--table` with the preloaded MenhirLib by default. The code back-end needs Menhir's `--infer-write-query`/`--infer-read-reply` protocol answered by the in-browser type checker (a later phase). |
-| Autograding | Part of v1. |
+| Autograding | Part of v1, including answers of several files. |
 | Error messages | OCaml's own errors and warnings, unchanged. For a compiler course these are the right messages to learn. |
 
-### Open questions for phase 0
+### Decided with the CS4212 teaching team (#6)
 
-* **What a run shows.** Toplevel style (`val x : int = 3` for each phrase), or only the program's
-  output plus the value of the last expression? Toplevel style suits the REPL, and output-only suits a
-  program. A proposed answer: the editor run shows output only, the REPL shows toplevel style, and
-  the result of a run, which testcases compare against, is the last phrase's value printed by the
-  toplevel printer (`[1; 2]`, `"abc"`).
-* **Multi-file programs.** Each `.ml` (and its `.mli`, if any) becomes a module of the same name,
-  compiled in dependency order (computed with `compiler-libs`' `Depend`, as `ocamldep` does). `.mll`
-  and `.mly` files are run through ocamllex and Menhir first. Which file is the entry point, and how
-  this maps to the frontend's folder mode, is to be settled.
-* **Multi-file assessments.** Assessments today submit one program. CS4212 assignments have several
-  files. Do we need multi-file answers in the backend and frontend, or do assignments put the
-  student's files in prepend/postpend, with one student file?
-* **The language's position in the directory** (its "chapter" for the backend, after backend#1386)
-  and how the grader recognizes OCaml.
+* **What a run shows.** A run of the editor's program shows only what the program prints, plus the
+  value of its last phrase if that phrase is an expression (`fact 5` or `fact 5;;`, not
+  `let _ = fact 5`), printed by OCaml's toplevel printer without its type: `120`, `"abc"`, `[1; 2]`.
+  A phrase typed in the REPL is shown toplevel style, as `ocaml` shows it: `- : int = 6`,
+  `val fact : int -> int = <fun>`. The *result* of a run, which testcases compare against, is that
+  last value, so a testcase `fact 5` with answer `120` passes.
+* **Multi-file programs: the entry point is the file open in the editor.** A run compiles the files
+  of the folder that the open file depends on, directly or not (`.ml` with its `.mli`, and the `.ml`
+  files generated from `.mll` and `.mly`), as modules in dependency order, and runs the open file last,
+  as `dune exec` would with it as the executable. There is no configuration file.
+* **Multi-file answers in assessments are part of v1.** A CS4212 question can have several files
+  (lexer, parser, AST, driver), some given and fixed, some for the student to write. This is a
+  Source Academy feature that is not specific to OCaml (Python's folder imports can use it too), and it
+  needs work in the backend, the frontend and the grader: see "Multi-file assessments" under phase 4.
+* **The backend tells the grader the language.** The grader dispatches on the event's `language`, as
+  it does for `javascript`. backend#1367 (conductor assessments, open) already sends the library's
+  `(language, evaluator)` pair to the grader, so OCaml questions use a conductor library with
+  `language: "ocaml"`; the grader does not depend on the order of the language directory.
 
 ## Architecture
 
@@ -116,8 +120,8 @@ A go/no-go spike, kept in `experiments/spike/`:
    expression).
 
 **Go** if step 2 works end to end in all three browsers. Record the numbers and the
-js_of_ocaml/wasm_of_ocaml and version decisions in this document, and settle the open questions above
-with the CS4212 teaching team.
+js_of_ocaml/wasm_of_ocaml and version decisions in this document. (The questions for the CS4212
+teaching team are settled: see "Decided with the CS4212 teaching team".)
 
 ### Phase 1: repository and the OCaml evaluator (about 2 weeks)
 
@@ -126,7 +130,7 @@ with the CS4212 teaching team.
   GitHub Pages.
 * The conductor evaluator: chunks run as toplevel phrases in one session; output from
   `print_string`, `Printf`, and friends goes to the REPL; errors and warnings carry line and column;
-  results print as decided in phase 0; `read_line` maps to conductor input if the conductor supports
+  results print as decided above (output only for a run, toplevel style in the REPL); `read_line` maps to conductor input if the conductor supports
   it.
 * Lazy loading from a `blob:` URL, and a Node host for the tests.
 * Tests: a corpus of OCaml programs with expected output and errors, run in Node in CI.
@@ -148,19 +152,42 @@ with the CS4212 teaching team.
 * Tests: CS4212-style grammars with and without conflicts, and a lexer and parser for a toy language
   run end to end.
 
-### Phase 4: autograding (about 1.5 weeks)
+### Phase 4: autograding (about 2.5 weeks)
 
-* **Testcase semantics**: a testcase is OCaml phrases appended after prepend, student program, and
-  postpend. Its result, printed by the toplevel printer, is compared with the expected answer.
+* **Testcase semantics**: a testcase is OCaml phrases run after the program (prepend, student
+  program, postpend; or, for a question of several files, after the entry file), in the same toplevel
+  session. Its result is the value of its last phrase, printed as decided above, and is compared with
+  the expected answer.
 * **Frontend**: testcase grading currently always runs under Python §4
-  (`frontend/src/features/directory/testCaseLanguage.ts`). It needs to use the assessment's language,
-  or a grading language that the language directory names for each language.
+  (`frontend/src/features/directory/testCaseLanguage.ts`). It must use the assessment's language
+  (frontend#4560).
 * **Grader** (`source-academy/grader`): an `ocamlGrader` next to `pythonGrader` and `sourceGrader`,
-  running the toplevel in Node `worker_threads` with a timeout, and dispatch to it.
-* **Backend**: the autograder must tell the grader that a question is OCaml, either by sending a
-  `language` field or through the chapter number (the language's position in the directory). This
-  relates to backend#1367 (conductor assessments).
-* Multi-file submissions, if phase 0 decides that they are needed.
+  running the toplevel in Node `worker_threads` with a timeout, dispatched on `language: "ocaml"`
+  (grader#415).
+* **Backend**: OCaml questions use a conductor library, whose `(language, evaluator)` the autograder
+  sends to the grader (backend#1367, backend#1388).
+
+#### Multi-file assessments
+
+Today a programming question has one template, prepend and postpend, and an answer is one string
+(`ProgrammingAnswer.code`); the assessment workspace uses only the first editor tab (its code has
+TODOs saying that folder mode needs a refactoring). The design, *proposed* and settled in #22:
+
+* **Question**: an optional list of `files`, each with a `path`, its `content`, and whether the
+  student may edit it. Fixed files (a given AST or driver) play the part of prepend and postpend;
+  editable files are the template. An `entry` path names the file that runs (and after which the
+  testcases run). A question has `files` or the single template, prepend and postpend, not both, so
+  existing questions are unchanged.
+* **Answer**: `files`, a map from path to content, of the editable files only, next to `code`
+  (one or the other, like the format check of backend#1367).
+* **Assessment format**: the XML of a question (`xml_parser.ex`) gets a way to give the files.
+* **Frontend**: the assessment workspace in folder mode with the question's files (fixed ones
+  read-only); saving and submitting `files`; the grading view and the editing workspace showing them;
+  testcase runs giving the files to the evaluator through the conductor's file requests, as the
+  playground's folder mode does.
+* **Grader**: the event carries `files` and `entry`; `ocamlGrader` runs them as the evaluator does.
+
+Not OCaml-specific: Python with folder imports can use the same questions.
 
 ### Phase 5: language directory, documentation, release (about 3 days)
 
@@ -192,9 +219,11 @@ with the CS4212 teaching team.
 
 ## Effort
 
-About **8 to 9 weeks** for one experienced developer: phase 0, 1 week; phase 1, 2 weeks; phase 2,
-1 week; phase 3, 2 weeks; phase 4, 1.5 weeks; phase 5, 3 days. Phase 4's frontend, grader, and
-backend work can start after phase 1, in parallel with phases 2 and 3.
+About **10 weeks** of work for one experienced developer: phase 0, 1 week; phase 1, 2 weeks;
+phase 2, 1 week; phase 3, 2 weeks; phase 4, 2.5 weeks (1 for the OCaml grading, 1.5 for multi-file
+assessments across the backend, frontend and grader); phase 5, 3 days. The target is 2 December 2026,
+so the work has to run in parallel: phase 4's backend, frontend and grader work starts now, against
+the design above, alongside phases 0 to 3.
 
 ## Risks
 
@@ -207,5 +236,6 @@ backend work can start after phase 1, in parallel with phases 2 and 3.
   several MB. It is loaded lazily, and only by OCaml users.
 * **Version drift.** The toplevel, js_of_ocaml, and Menhir are pinned together, and an upgrade is a
   deliberate change with the test corpus as its check.
-* **Multi-file assessments.** If they need backend and frontend changes beyond the language, that work
-  is outside this repository and may take longer than phase 4 allows.
+* **Multi-file assessments** are the largest piece outside this repository: a new question and answer
+  format in the backend, folder mode in the assessment workspace, and the grader. They are on the
+  critical path to 2 December, and depend on backend#1367 being merged.
