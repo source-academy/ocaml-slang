@@ -71,10 +71,13 @@ checker is never ours to maintain.
   (lexer, parser, AST, driver), some given and fixed, some for the student to write. This is a
   Source Academy feature that is not specific to OCaml (Python's folder imports can use it too), and it
   needs work in the backend, the frontend and the grader: see "Multi-file assessments" under phase 4.
-* **The backend tells the grader the language.** The grader dispatches on the event's `language`, as
-  it does for `javascript`. backend#1367 (conductor assessments, open) already sends the library's
-  `(language, evaluator)` pair to the grader, so OCaml questions use a conductor library with
-  `language: "ocaml"`; the grader does not depend on the order of the language directory.
+* **Nothing outside ocaml-slang is specific to OCaml.** The backend, the frontend and the grader stay
+  language-agnostic. A question names its languages and evaluators by their ids in the language
+  directory, for the student, the frontend grader and the backend grader (backend#1387), and the
+  backend passes them on unchanged. The grader runs whichever conductor evaluator the event names, in
+  a Node host (grader#415), so there is no `ocamlGrader`: OCaml's evaluator only has to run under that
+  host. The general changes that OCaml needs (#1387, frontend#4560, grader#415, and multi-file
+  questions) are features for every language, tracked here as dependencies.
 
 ## Architecture
 
@@ -87,8 +90,8 @@ frontend (language-agnostic)
             ├─ preloaded: Stdlib, MenhirLib (.cmi files and code)
             ├─ menhir and ocamllex, compiled to JS/Wasm, run on the in-memory file system
             └─ in-memory file system: the program's files, generated .ml files, Menhir reports
-grader (AWS Lambda, Node)
-  └─ ocamlGrader: the same toplevel, hosted in Node worker_threads
+grader (AWS Lambda, Node, language-agnostic)
+  └─ conductor host: runs the evaluator that the event names, e.g. OCamlEvaluator.js
 ```
 
 * **Chunks.** A conductor chunk is a sequence of toplevel phrases, so the REPL keeps one toplevel
@@ -158,14 +161,15 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
   program, postpend; or, for a question of several files, after the entry file), in the same toplevel
   session. Its result is the value of its last phrase, printed as decided above, and is compared with
   the expected answer.
-* **Frontend**: testcase grading currently always runs under Python §4
-  (`frontend/src/features/directory/testCaseLanguage.ts`). It must use the assessment's language
-  (frontend#4560).
-* **Grader** (`source-academy/grader`): an `ocamlGrader` next to `pythonGrader` and `sourceGrader`,
-  running the toplevel in Node `worker_threads` with a timeout, dispatched on `language: "ocaml"`
-  (grader#415).
-* **Backend**: OCaml questions use a conductor library, whose `(language, evaluator)` the autograder
-  sends to the grader (backend#1367, backend#1388).
+* **In ocaml-slang**: the evaluator runs under the grader's Node host (no browser-only APIs on the
+  path that runs programs, the bundle loadable from a file), tested in CI (#21).
+* **General dependencies**, none specific to OCaml:
+  * backend#1387: languages and evaluators by id, for the student, the frontend grader and the
+    backend grader, sent to the frontend and to the grader.
+  * frontend#4560: testcases run under the question's frontend grader language and evaluator, instead
+    of the hardcoded table in `src/features/directory/testCaseLanguage.ts`, which knows only Python.
+  * grader#415: the grader runs any conductor evaluator that the event names, in a Node host, with a
+    timeout, instead of one grader per language.
 
 #### Multi-file assessments
 
@@ -185,7 +189,8 @@ TODOs saying that folder mode needs a refactoring). The design, *proposed* and s
   read-only); saving and submitting `files`; the grading view and the editing workspace showing them;
   testcase runs giving the files to the evaluator through the conductor's file requests, as the
   playground's folder mode does.
-* **Grader**: the event carries `files` and `entry`; `ocamlGrader` runs them as the evaluator does.
+* **Grader**: the event carries `files` and `entry`; the conductor host serves the files to the
+  evaluator through file requests (grader#416).
 
 Not OCaml-specific: Python with folder imports can use the same questions.
 
@@ -220,8 +225,8 @@ Not OCaml-specific: Python with folder imports can use the same questions.
 ## Effort
 
 About **10 weeks** of work for one experienced developer: phase 0, 1 week; phase 1, 2 weeks;
-phase 2, 1 week; phase 3, 2 weeks; phase 4, 2.5 weeks (1 for the OCaml grading, 1.5 for multi-file
-assessments across the backend, frontend and grader); phase 5, 3 days. The target is 2 December 2026,
+phase 2, 1 week; phase 3, 2 weeks; phase 4, 2.5 weeks (1 for the general grading changes, 1.5 for
+multi-file assessments across the backend, frontend and grader); phase 5, 3 days. The target is 2 December 2026,
 so the work has to run in parallel: phase 4's backend, frontend and grader work starts now, against
 the design above, alongside phases 0 to 3.
 
