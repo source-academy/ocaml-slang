@@ -1,0 +1,8 @@
+(executable
+ (name toplevel)
+ (modes byte js)
+ (link_flags (-linkall))
+ (ocamlc_flags (:standard -g))
+ (js_of_ocaml (flags (:standard --toplevel)) (javascript_files stubs.js))
+ (preprocess (pps js_of_ocaml-ppx))
+ (libraries js_of_ocaml-compiler.runtime js_of_ocaml js_of_ocaml-toplevel compiler-libs.toplevel menhirLib))

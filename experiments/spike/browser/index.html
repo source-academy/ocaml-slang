@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8"><title>ocaml-slang spike</title>
+<script>
+window.runSpike = async () => {
+  const names = ['ast.ml', 'lexer.mll', 'parser.mly', 'parser_conflicts.mly', 'interp.ml', 'sample.toy'];
+  const files = Object.fromEntries(await Promise.all(names.map(async (n) => [n, await (await fetch('toy/' + n)).text()])));
+  const w = new Worker('worker.js');
+  return new Promise((res) => { w.onmessage = (e) => res(e.data); w.onerror = (e) => res({ ok: false, error: e.message }); w.postMessage({ files, sample: files['sample.toy'] }); });
+};
+</script>
