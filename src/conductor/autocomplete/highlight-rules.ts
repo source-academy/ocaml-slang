@@ -21,14 +21,14 @@ const digits = "[0-9][0-9_]*";
 const suffix = "[lLn]?";
 
 /**
- * Ace highlight rules for OCaml, written for this evaluator. Comments nest (`(* (* *) *)`) and
- * `(*)` is not a comment but the operator `( * )`; `{|...|}` and `{id|...|id}` are quoted strings
+ * Ace highlight rules for OCaml, written for this evaluator. Comments nest (`(* (* *) *)`), and every `(*`
+ * starts one, as in OCaml (which warns about `(*)`: the operator is written `( * )`); `{|...|}` and `{id|...|id}` are quoted strings
  * (a `{id|` string ends at any `|id2}`, as a rule cannot remember the `id`).
  */
 export default function ocamlHighlightRules(): AceRules {
   return {
     start: [
-      { token: "comment", regex: "\\(\\*(?!\\))", push: "comment" },
+      { token: "comment", regex: "\\(\\*", push: "comment" },
       { token: "string", regex: '"', next: "string" },
       { token: "string", regex: "\\{\\|", next: "quotedstring" },
       { token: "string", regex: "\\{[a-z_]+\\|", next: "quotedstringid" },
@@ -67,7 +67,7 @@ export default function ocamlHighlightRules(): AceRules {
       { token: "text", regex: "\\s+" },
     ],
     comment: [
-      { token: "comment", regex: "\\(\\*(?!\\))", push: "comment" },
+      { token: "comment", regex: "\\(\\*", push: "comment" },
       { token: "comment", regex: "\\*\\)", next: "pop" },
       { defaultToken: "comment" },
     ],

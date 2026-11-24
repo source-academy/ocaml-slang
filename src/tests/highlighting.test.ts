@@ -76,8 +76,9 @@ describe("OCaml highlighting", () => {
     expect(lines[2][lines[2].length - 1]).toBe("keyword:let");
   });
 
-  test("(*) is the operator ( * ), not a comment", () => {
-    expect(line("(*)")).toEqual(["paren.lparen:(", "keyword.operator:*", "paren.rparen:)"]);
+  test("(*) starts a comment, as in OCaml; the operator is written ( * )", () => {
+    expect(tokens("(*) a\nb *) let")).toEqual([["comment:(*) a"], ["comment:b *)", "keyword:let"]]);
+    expect(line("( * )")).toEqual(["paren.lparen:(", "keyword.operator:*", "paren.rparen:)"]);
   });
 
   test("strings, with escapes, and quoted strings", () => {
