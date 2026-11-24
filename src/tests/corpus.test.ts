@@ -7,6 +7,9 @@
  * - `name.ml` is run as the editor's program (`evaluateFile`).
  * - `name.repl` is a session: chunks, separated by a line `(* --- *)`, each sent to `evaluateChunk`
  *   after a fresh session starts.
+ * - `projects/case/` is a program of several files: the files are in the folder `/project`, and
+ *   each `entry.ml.expected` there is for running `entry.ml` as the file open in the editor (`main.ml`
+ *   is run if it has no other entry).
  *
  * An `.expected` file lists the messages in the order they were sent, one entry per message:
  *   out: text           (further lines of a message are indented by 4 spaces)
@@ -39,10 +42,11 @@ function indent(text: string): string {
 
 type Recorder = { conductor: IRunnerPlugin; lines: string[] };
 
-function recorder(): Recorder {
+function recorder(folder: Record<string, string> = {}): Recorder {
   const lines: string[] = [];
   const conductor = {
     sendOutput: (text: string) => lines.push(`out: ${indent(text)}`),
+    requestFile: (path: string) => Promise.resolve(folder[path]),
     sendError: (
       e: ConductorError & { line?: number; column?: number; endLine?: number; endColumn?: number },
     ) => {
@@ -71,7 +75,43 @@ async function runCase(path: string): Promise<string> {
   return lines.join("\n") + "\n";
 }
 
-const cases = files(root).filter(f => f.endsWith(".ml") || f.endsWith(".repl"));
+const projectsRoot = join(root, "projects");
+const isProjectFile = (f: string) => f.startsWith(projectsRoot + "/");
+const cases = files(root).filter(
+  f => (f.endsWith(".ml") || f.endsWith(".repl")) && !isProjectFile(f),
+);
+
+/** The entries of a project: the files with an `.expected`, and `main.ml`. */
+function projects(): { dir: string; entry: string; expected: string }[] {
+  return readdirSync(projectsRoot)
+    .sort()
+    .flatMap(name => {
+      const dir = join(projectsRoot, name);
+      const entries = new Set(
+        readdirSync(dir)
+          .filter(f => f.endsWith(".expected"))
+          .map(f => f.slice(0, -".expected".length)),
+      );
+      if (existsSync(join(dir, "main.ml"))) entries.add("main.ml");
+      return [...entries]
+        .sort()
+        .map(entry => ({ dir, entry, expected: join(dir, `${entry}.expected`) }));
+    });
+}
+
+async function runProject(dir: string, entry: string): Promise<string> {
+  const folder: Record<string, string> = {};
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith(".expected"))
+      folder[`/project/${name}`] = readFileSync(join(dir, name), "utf8");
+  }
+  const { conductor, lines } = recorder(folder);
+  await new OCamlEvaluator(conductor).evaluateFile(
+    `/project/${entry}`,
+    folder[`/project/${entry}`],
+  );
+  return lines.join("\n") + "\n";
+}
 
 describe("corpus", () => {
   beforeAll(() => {
@@ -82,10 +122,20 @@ describe("corpus", () => {
   test("has cases", () => expect(cases.length).toBeGreaterThan(40));
 
   test("every case has an expected file, and every expected file a case", () => {
-    const expected = files(root).filter(f => f.endsWith(".expected"));
+    const expected = files(root).filter(f => f.endsWith(".expected") && !isProjectFile(f));
     expect(expected.map(f => f.slice(0, -".expected".length)).sort()).toEqual(
       update ? expected.map(f => f.slice(0, -".expected".length)).sort() : [...cases].sort(),
     );
+  });
+
+  test.each(projects().map(p => [relative(root, p.expected), p]))("%s", async (_name, p) => {
+    const actual = await runProject(p.dir, p.entry);
+    if (update) {
+      writeFileSync(p.expected, actual);
+      return;
+    }
+    expect(existsSync(p.expected)).toBe(true);
+    expect(actual).toBe(readFileSync(p.expected, "utf8"));
   });
 
   test.each(cases.map(c => [relative(root, c), c]))("%s", async (_name, path) => {

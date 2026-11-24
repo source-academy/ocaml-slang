@@ -1,0 +1,1 @@
+let f () = Main.name

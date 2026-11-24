@@ -1,0 +1,5 @@
+out: C loads
+out: B loads
+out: A loads
+out: main starts
+out: 81

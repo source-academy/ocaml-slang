@@ -1,0 +1,8 @@
+error: File "lib.ml", line 1, characters 0-0:
+    Error: Signature mismatch:
+           Modules do not match:
+             sig val hello : unit -> string end
+           is not included in
+             sig val hello : unit -> string val missing : int end
+           The value missing is required but not provided
+           File "lib.mli", line 2, characters 0-17: Expected declaration

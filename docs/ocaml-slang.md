@@ -149,9 +149,25 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
 
 ### Phase 2: multi-file programs (about 1 week)
 
-* Files come from the frontend's folder mode through the conductor's file requests.
-* `.ml`/`.mli` pairs become modules, compiled in dependency order. Cycles are reported as errors.
-* Errors name the file as well as the line and column.
+* Files come from the frontend's folder mode through the conductor's file requests. A request is
+  for a path, and nothing lists a folder, so the evaluator finds the modules as `ocamldep` does: it
+  reads the names of the modules that the open file refers to (compiler-libs' `Depend`), and requests
+  `foo.ml`, `foo.mli` (and `Foo.ml`, `Foo.mli`) in the directory of the open file for each, then the
+  same for the files it found. A name with no file there is not a module of the program: the
+  Stdlib's, or unbound, which OCaml says. Files that the program does not refer to are never read.
+* The open file is the entry, and it runs last (the frontend runs the active editor tab, and a
+  share link opens on the tab that was active when it was made). It is not a module: nothing can
+  refer to it, and a reference to a module of its name is to the Stdlib's. A program of one file
+  runs as before.
+* `.ml`/`.mli` pairs become modules (`module Foo : sig <foo.mli> end = struct <foo.ml> end`, with
+  the locations of the files), compiled in dependency order; every file is checked before any runs.
+  A file of the program shadows the Stdlib module of its name, as in dune. A cycle, an interface
+  without an implementation, and a file of the program that does not parse are errors. After a run
+  the modules stay in the session, so the REPL can use them.
+* Errors in the open file have a line and column. Errors and warnings in another file name it
+  (`File "lib.ml", line 2, characters 17-18:`) and have no line and column for the editor, which
+  shows the open file (the frontend does not yet take a file with an error).
+* Not yet: files in subdirectories (dune's `include_subdirs`).
 
 ### Phase 3: Menhir and ocamllex (about 2 weeks)
 

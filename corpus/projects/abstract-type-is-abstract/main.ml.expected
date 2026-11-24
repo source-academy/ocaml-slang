@@ -1,0 +1,2 @@
+error 2:20-2:21: Error: The value c has type Counter.t but an expression was expected of type
+             int

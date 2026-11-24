@@ -8,6 +8,8 @@ upgrade of OCaml, js_of_ocaml, Menhir or the toplevel code: `yarn test corpus` r
 * `name.ml.expected` lists the messages in the order they were sent: `out: text` for output and
   results (further lines of a message indented by 4 spaces), `error L:C-L:C: text` for an error
   (1-based lines, 0-based columns in editor characters), `--- chunk N` between the chunks of a session.
+* `projects/case/` is a program of several files, served as the folder `/project`; each `entry.ml.expected`
+  is for running `entry.ml` as the file open in the editor (`main.ml` if there is none).
 * The groups: `core`, `records-variants`, `exceptions`, `modules`, `printf`, `errors` (syntax, type and
   other errors, warnings, columns after non-ASCII text), `repl`, `misc` (int width, MenhirLib, a hand-written
   lexer and parser, ...).
