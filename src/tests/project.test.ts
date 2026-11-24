@@ -172,6 +172,22 @@ describe("programs of several files", () => {
     expect(outputs).toEqual(["21", "40", "40"]);
   });
 
+  test("going back to an earlier text of a grammar generates it again; only the latest is kept", async () => {
+    const folder: Record<string, string> = {
+      "/p/parser.mly": GRAMMAR("n + 1"),
+      "/p/main.ml": MAIN,
+    };
+    const { evaluator, outputs } = setup(folder);
+    for (const action of ["n + 1", "n * 2", "n + 1", "n + 1"]) {
+      folder["/p/parser.mly"] = GRAMMAR(action);
+      await evaluator.evaluateFile("/p/main.ml", MAIN);
+    }
+    expect(outputs).toEqual(["21", "40", "21", "21"]);
+    const cache = (evaluator as unknown as { tools: { generated: Map<string, unknown> } }).tools
+      .generated;
+    expect(cache.size).toBe(1);
+  });
+
   test("an error in a semantic action is in the .mly, at its line and column", async () => {
     const { evaluator, errors } = setup({ "/p/parser.mly": GRAMMAR('n ^ "x"') });
     await evaluator.evaluateFile("/p/main.ml", MAIN);

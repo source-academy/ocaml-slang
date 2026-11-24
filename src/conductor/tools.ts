@@ -91,8 +91,9 @@ const withoutDirectory = (code: string): string => code.split('"/static/').join(
 /** The tools, fetched when first used (they are published next to the toplevel) and kept. */
 export class Tools {
   private readonly scripts = new Map<string, Promise<string>>();
-  /** What was generated, by source: a file is generated again only if its text changed. */
-  private readonly generated = new Map<string, Generation>();
+  /** What was generated for each file, with the text it was made from: a file is generated again only
+   * if its text changed, and only the latest is kept. */
+  private readonly generated = new Map<string, { source: string; made: Generation }>();
 
   private script(name: "menhir" | "ocamllex"): Promise<string> {
     let script = this.scripts.get(name);
@@ -159,11 +160,11 @@ export class Tools {
     source: string,
     generate: () => Promise<Generation>,
   ): Promise<Generation> {
-    const key = `${tool}\0${file}\0${source}`;
+    const key = `${tool}\0${file}`;
     const known = this.generated.get(key);
-    if (known) return known;
+    if (known?.source === source) return known.made;
     const made = await generate();
-    this.generated.set(key, made);
+    this.generated.set(key, { source, made });
     return made;
   }
 }
