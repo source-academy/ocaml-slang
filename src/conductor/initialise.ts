@@ -1,5 +1,6 @@
 import type { ILink } from "@sourceacademy/conductor/conduit";
 import { initialise } from "@sourceacademy/conductor/runner";
+import { registerAutoCompletePlugin } from "./autocomplete";
 import { OCamlEvaluator } from "./index";
 
 /**
@@ -20,4 +21,9 @@ function nodeLink(): ILink {
   } as unknown as ILink;
 }
 
-initialise(OCamlEvaluator, typeof self === "undefined" ? nodeLink() : undefined);
+const { runnerPlugin } = initialise(
+  OCamlEvaluator,
+  typeof self === "undefined" ? nodeLink() : undefined,
+);
+// The frontend highlights with what the evaluator sends; a grader's host has no editor.
+if (typeof self !== "undefined") registerAutoCompletePlugin(runnerPlugin);

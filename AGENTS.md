@@ -7,7 +7,8 @@ OCaml for Source Academy: a conductor evaluator that runs the real OCaml topleve
 
 * `ocaml/toplevel/`: the OCaml toplevel (compiler-libs, Stdlib, MenhirLib), compiled to one JavaScript
   file with js_of_ocaml (`dune`).
-* `src/conductor/`: the TypeScript conductor evaluator `OCamlEvaluator`.
+* `src/conductor/`: the TypeScript conductor evaluator `OCamlEvaluator`; `autocomplete/` is its
+  syntax-highlighting plugin for the frontend.
 * `tools/`: what is linked into menhir and ocamllex when they are built to JavaScript.
 * `src/tests/`: Jest tests, which run the built toplevel in Node. `src/tests/corpus.test.ts` runs the
   programs of `corpus/` and compares what the evaluator sends with their `.expected` files (see
