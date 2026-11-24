@@ -160,6 +160,17 @@ describe("sessions and chunks", () => {
     expect(outputs.join("\n")).toContain("- : int = 1");
   });
 
+  test("spaces that a custom printer emits are kept", async () => {
+    const program =
+      'type s = S;; let pp ppf S = Format.pp_print_string ppf " X ";; #install_printer pp;; S;;';
+    const run = fakeConductor();
+    await new OCamlEvaluator(run.conductor).evaluateFile("main.ml", program);
+    expect(run.outputs[run.outputs.length - 1]).toBe(" X ");
+    const chunk = fakeConductor();
+    await new OCamlEvaluator(chunk.conductor).evaluateChunk(program);
+    expect(chunk.outputs[chunk.outputs.length - 1].endsWith("=  X")).toBe(true);
+  });
+
   test("modUse returns the signature it prints", () => {
     g.ocaml!.writeFile("/static/m4.ml", "let m4 = 42;;");
     expect(g.ocaml!.modUse("/static/m4.ml")).toContain("module M4");

@@ -43,6 +43,15 @@ let captured : phrase list ref = ref []
 let errbuf = Buffer.create 256
 let ppf = Format.formatter_of_buffer errbuf (* the log of the current phrase, in order *)
 
+(* The toplevel ends what it prints with newlines; nothing else is removed, since a printer from
+   #install_printer may mean its spaces. *)
+let strip_newlines s =
+  let n = ref (String.length s) in
+  while !n > 0 && (s.[!n - 1] = '\n' || s.[!n - 1] = '\r') do
+    decr n
+  done;
+  String.sub s 0 !n
+
 let () =
   let original = !Toploop.print_out_phrase in
   Toploop.print_out_phrase :=
@@ -52,11 +61,11 @@ let () =
       let phr, value =
         match phr with
         | Outcometree.Ophr_eval (v, ty) ->
-            let printed = String.trim (Format.asprintf "%a" !Toploop.print_out_value v) in
+            let printed = Format.asprintf "%a" !Toploop.print_out_value v in
             (Outcometree.Ophr_eval (Oval_stuff printed, ty), Some printed)
         | _ -> (phr, None)
       in
-      let text = String.trim (Format.asprintf "%a" original phr) in
+      let text = strip_newlines (Format.asprintf "%a" original phr) in
       let raised = match phr with Outcometree.Ophr_exception _ -> true | _ -> false in
       captured := { text; value; raised } :: !captured;
       (* One log, in order, with what directives and nested errors write to [ppf]. *)
