@@ -41,7 +41,7 @@ type phrase = { text : string; value : string option; raised : bool }
 (* The phrases printed since the last reset, latest first: a directive such as #use runs several. *)
 let captured : phrase list ref = ref []
 let errbuf = Buffer.create 256
-let ppf = Format.formatter_of_buffer errbuf
+let ppf = Format.formatter_of_buffer errbuf (* the log of the current phrase, in order *)
 
 let () =
   let original = !Toploop.print_out_phrase in
@@ -58,7 +58,12 @@ let () =
       in
       let text = String.trim (Format.asprintf "%a" original phr) in
       let raised = match phr with Outcometree.Ophr_exception _ -> true | _ -> false in
-      captured := { text; value; raised } :: !captured
+      captured := { text; value; raised } :: !captured;
+      (* One log, in order, with what directives and nested errors write to [ppf]. *)
+      if not raised then begin
+        Format.pp_print_string ppf text;
+        Format.pp_print_newline ppf ()
+      end
 
 type error = { message : string; loc : Location.t option }
 
@@ -162,7 +167,6 @@ let run code on_output =
             in
             (* What a directive wrote to the formatter, and what it printed before it failed, is shown. *)
             if ok then begin
-              List.iter (fun l -> add l.text) printed;
               add (String.trim (Buffer.contents errbuf));
               value :=
                 match List.rev printed with
@@ -170,9 +174,10 @@ let run code on_output =
                 | _ -> None
             end
             else begin
-              List.iter (fun l -> if not l.raised then add l.text) printed;
               match List.find_opt (fun l -> l.raised) printed with
-              | Some l -> fail { message = l.text; loc = None }
+              | Some l ->
+                  add (String.trim (Buffer.contents errbuf));
+                  fail { message = l.text; loc = None }
               | None -> fail { message = String.trim (Buffer.contents errbuf); loc = None }
             end)
           phrases
@@ -239,8 +244,7 @@ let mod_use path =
   Format.pp_print_flush ppf ();
   flush_output ();
   emit := ignore;
-  let results = String.concat "\n" (List.rev_map (fun l -> l.text) !captured) in
-  String.concat "" [ Buffer.contents out; Buffer.contents errbuf; results ]
+  Buffer.contents out ^ Buffer.contents errbuf
 
 let () =
   Js_of_ocaml_toplevel.initialize ();

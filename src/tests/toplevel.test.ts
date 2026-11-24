@@ -171,8 +171,10 @@ describe("sessions and chunks", () => {
     const ev = new OCamlEvaluator(conductor);
     // The directive itself succeeds (as in `ocaml`): the error of the file is part of its text.
     await ev.evaluateChunk('#use "/static/defs5.ml";;');
-    expect(outputs.join("\n")).toContain("val a5 : int = 1");
-    expect(outputs.join("\n")).toContain("This constant has type string");
+    const text = outputs.join("\n");
+    expect(text).toContain("val a5 : int = 1");
+    // in the order of the file: the definition, then the error that stops it
+    expect(text.indexOf("val a5")).toBeLessThan(text.indexOf("This constant has type string"));
   });
 
   test("a directive's own text is shown", async () => {
