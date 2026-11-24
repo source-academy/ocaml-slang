@@ -36,7 +36,7 @@ let flush_output () =
 (* What the toplevel prints for a phrase (a value, a signature, an uncaught exception) is captured
    here by [Toploop.print_out_phrase], so that it is not mixed with the program's output. Errors that
    [Toploop.execute_phrase] prints itself, those of directives, go to [ppf]. *)
-type phrase = { text : string; value : string option; unit_typed : bool; raised : bool }
+type phrase = { text : string; value : string option; raised : bool }
 
 (* The phrases printed since the last reset, latest first: a directive such as #use runs several. *)
 let captured : phrase list ref = ref []
@@ -49,18 +49,16 @@ let () =
     fun _ phr ->
       (* The value is printed once (a printer from #install_printer may have effects, and a
          printer for a type is run for each value it prints) and then shown as it is. *)
-      let phr, value, unit_typed =
+      let phr, value =
         match phr with
         | Outcometree.Ophr_eval (v, ty) ->
             let printed = String.trim (Format.asprintf "%a" !Toploop.print_out_value v) in
-            ( Outcometree.Ophr_eval (Oval_stuff printed, ty),
-              Some printed,
-              ty = Outcometree.Otyp_constr (Oide_ident { printed_name = "unit" }, []) )
-        | _ -> (phr, None, false)
+            (Outcometree.Ophr_eval (Oval_stuff printed, ty), Some printed)
+        | _ -> (phr, None)
       in
       let text = String.trim (Format.asprintf "%a" original phr) in
       let raised = match phr with Outcometree.Ophr_exception _ -> true | _ -> false in
-      captured := { text; value; unit_typed; raised } :: !captured
+      captured := { text; value; raised } :: !captured
 
 type error = { message : string; loc : Location.t option }
 
@@ -96,6 +94,20 @@ let typecheck env = function
       let _, _, env = Topcommon.typecheck_phrase silent env sstr in
       env
   | Parsetree.Ptop_dir _ -> env
+
+(* Whether the phrase is an expression of type unit, aliases of unit included. *)
+let is_unit_expression env = function
+  | Parsetree.Ptop_def sstr -> (
+      try
+        let str, _, _ = without_warnings (fun () -> Topcommon.typecheck_phrase silent env sstr) in
+        match List.rev str.Typedtree.str_items with
+        | { str_desc = Tstr_eval (e, _); _ } :: _ -> (
+            match Types.get_desc (Ctype.expand_head e.exp_env e.exp_type) with
+            | Tconstr (p, _, _) -> Path.same p Predef.path_unit
+            | _ -> false)
+        | _ -> false
+      with _ -> false)
+  | Parsetree.Ptop_dir _ -> false
 
 (* Checks the phrases up to the first directive; returns how many it checked. *)
 let check phrases =
@@ -135,27 +147,34 @@ let run code on_output =
           (fun i ph ->
             (* After a directive, a phrase is checked just before it runs, for the same errors. *)
             if i >= checked then ignore (without_warnings (fun () -> typecheck !Toploop.toplevel_env ph));
+            let unit_expression = is_expression ph && is_unit_expression !Toploop.toplevel_env ph in
             captured := [];
             Buffer.clear errbuf;
             let ok = Toploop.execute_phrase true ppf ph in
             Format.pp_print_flush ppf ();
             flush_output ();
             let printed = List.rev !captured in
+            let add text =
+              if text <> "" then begin
+                if Buffer.length result > 0 then Buffer.add_char result '\n';
+                Buffer.add_string result text
+              end
+            in
+            (* What a directive wrote to the formatter, and what it printed before it failed, is shown. *)
             if ok then begin
-              List.iter
-                (fun l ->
-                  if Buffer.length result > 0 then Buffer.add_char result '\n';
-                  Buffer.add_string result l.text)
-                printed;
+              List.iter (fun l -> add l.text) printed;
+              add (String.trim (Buffer.contents errbuf));
               value :=
                 match List.rev printed with
-                | l :: _ when is_expression ph && not l.unit_typed -> l.value
+                | l :: _ when is_expression ph && not unit_expression -> l.value
                 | _ -> None
             end
-            else
+            else begin
+              List.iter (fun l -> if not l.raised then add l.text) printed;
               match List.find_opt (fun l -> l.raised) printed with
               | Some l -> fail { message = l.text; loc = None }
-              | None -> fail { message = String.trim (Buffer.contents errbuf); loc = None })
+              | None -> fail { message = String.trim (Buffer.contents errbuf); loc = None }
+            end)
           phrases
       with
      | Failed -> ()

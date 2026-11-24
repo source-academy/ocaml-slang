@@ -165,6 +165,29 @@ describe("sessions and chunks", () => {
     expect(g.ocaml!.modUse("/static/m4.ml")).toContain("module M4");
   });
 
+  test("what #use printed before a later phrase of its file failed is shown, with OCaml's text of the error", async () => {
+    g.ocaml!.writeFile("/static/defs5.ml", 'let a5 = 1;;\nlet b5 : int = "s";;');
+    const { conductor, outputs } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    // The directive itself succeeds (as in `ocaml`): the error of the file is part of its text.
+    await ev.evaluateChunk('#use "/static/defs5.ml";;');
+    expect(outputs.join("\n")).toContain("val a5 : int = 1");
+    expect(outputs.join("\n")).toContain("This constant has type string");
+  });
+
+  test("a directive's own text is shown", async () => {
+    const { conductor, outputs, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk("#help;;");
+    expect(errors).toEqual([]);
+    expect(outputs.join("")).toContain("#quit");
+  });
+
+  test("an alias of unit is unit: a run shows no value", async () => {
+    const { conductor, outputs } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateFile("main.ml", "type u = unit;; (() : u);;");
+    expect(outputs).toEqual([]);
+  });
+
   test("a type error after a directive has a location too", async () => {
     g.ocaml!.writeFile("/static/defs2.ml", "let from_defs2 = 1;;");
     const { conductor, errors } = fakeConductor();
