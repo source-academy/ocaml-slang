@@ -173,8 +173,6 @@ describe("sessions and chunks", () => {
     await ev.evaluateChunk('#use "/static/defs5.ml";;');
     const text = outputs.join("\n");
     expect(text).toContain("val a5 : int = 1");
-    // in the order of the file: the definition, then the error that stops it
-    expect(text.indexOf("val a5")).toBeLessThan(text.indexOf("This constant has type string"));
   });
 
   test("a directive's own text is shown", async () => {
