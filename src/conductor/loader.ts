@@ -6,11 +6,15 @@ export const TOPLEVEL_URL = "https://source-academy.github.io/ocaml-slang/ocaml-
 /**
  * Where to fetch the toplevel from, if not {@link TOPLEVEL_URL}: set `OCAML_SLANG_TOPLEVEL_URL` on
  * the global object before the evaluator starts. Under Node (the tests, the grader's host) it can
- * also be the path of a file, which needs no network.
+ * also be the path of a file, which needs no network, and it can be set in the environment
+ * (`process.env`), which a host passes to a worker thread without a wrapper script.
  */
 function configuredUrl(): string {
   const url = (globalThis as { OCAML_SLANG_TOPLEVEL_URL?: unknown }).OCAML_SLANG_TOPLEVEL_URL;
-  return typeof url === "string" && url !== "" ? url : TOPLEVEL_URL;
+  if (typeof url === "string" && url !== "") return url;
+  const fromEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env?.OCAML_SLANG_TOPLEVEL_URL;
+  return fromEnv ? fromEnv : TOPLEVEL_URL;
 }
 
 type NodeRequire = (id: string) => unknown;

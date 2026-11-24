@@ -197,12 +197,22 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
 
 ### Phase 4: autograding (about 1 week)
 
-* **Testcase semantics**: a testcase is OCaml phrases run after the program (prepend, student
-  program, postpend), in the same toplevel
-  session. Its result is the value of its last phrase, printed as decided above, and is compared with
-  the expected answer.
-* **In ocaml-slang**: the evaluator runs under the grader's Node host (no browser-only APIs on the
-  path that runs programs, the bundle loadable from a file), tested in CI (#21).
+* **Testcase semantics** (#21): the frontend (`runTestCase.ts`) and the grader (`pythonGrader.ts`)
+  both make one program of a question (prepend, the student's program, postpend and the testcase,
+  joined by newlines), run it as a file, and compare the **last line it printed** with the expected
+  answer. For OCaml the last line is the value of the last phrase, printed as decided above, or what
+  the testcase printed. Because the parts are only joined by newlines, **a testcase (and a postpend
+  that has expressions) starts with `;;`**: otherwise `fact 5` after `let rec fact n = ...` is read
+  as part of that definition (tested in `src/tests/testcases.test.ts`). An error, including an
+  uncaught exception, is an error of the testcase.
+* **In ocaml-slang**: the evaluator runs under the grader's Node host (#21), as `dist/OCamlEvaluator.js`
+  in a `worker_threads` thread: with no `self` there, its conductor link is `parentPort`
+  (`src/conductor/initialise.ts`), and the toplevel is read from a file named by `OCAML_SLANG_TOPLEVEL_URL`
+  in the environment (no network). Measured under Node 22: 0.27 s from starting the thread to the
+  answer of a small program, about 100 MB resident, and it runs with a 128 MB heap limit, so a worker
+  per testcase, as the Python grader does, is feasible. An endless loop is stopped by terminating
+  the thread (the toplevel is synchronous). CI tests this with a conductor host built from
+  `BasicHostPlugin`; the grader's own host (grader#415) does not exist yet.
 * **General dependencies**, none specific to OCaml:
   * backend#1387: languages and evaluators by id, for the student, the frontend grader and the
     backend grader, sent to the frontend and to the grader.
