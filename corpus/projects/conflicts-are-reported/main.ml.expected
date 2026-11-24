@@ -1,3 +1,57 @@
 out: Warning: 2 states have shift/reduce conflicts.
     Warning: 4 shift/reduce conflicts were arbitrarily resolved.
+    
+    ** Conflict (shift/reduce) in state 5.
+    ** Tokens involved: PLUS MINUS
+    ** The following explanations concentrate on token PLUS.
+    ** This state is reached from main after reading:
+    
+    expr PLUS expr
+    
+    ** The derivations that appear below have the following common factor:
+    ** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+    
+    main 
+    expr EOF 
+    (?)
+    
+    ** In state 5, looking ahead at PLUS, shifting is permitted
+    ** because of the following sub-derivation:
+    
+    expr PLUS expr 
+              expr . PLUS expr 
+    
+    ** In state 5, looking ahead at PLUS, reducing production
+    ** expr -> expr PLUS expr
+    ** is permitted because of the following sub-derivation:
+    
+    expr PLUS expr // lookahead token appears
+    expr PLUS expr . 
+    
+    ** Conflict (shift/reduce) in state 7.
+    ** Tokens involved: PLUS MINUS
+    ** The following explanations concentrate on token PLUS.
+    ** This state is reached from main after reading:
+    
+    expr MINUS expr
+    
+    ** The derivations that appear below have the following common factor:
+    ** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+    
+    main 
+    expr EOF 
+    (?)
+    
+    ** In state 7, looking ahead at PLUS, shifting is permitted
+    ** because of the following sub-derivation:
+    
+    expr MINUS expr 
+               expr . PLUS expr 
+    
+    ** In state 7, looking ahead at PLUS, reducing production
+    ** expr -> expr MINUS expr
+    ** is permitted because of the following sub-derivation:
+    
+    expr PLUS expr // lookahead token appears
+    expr MINUS expr .
 out: 3

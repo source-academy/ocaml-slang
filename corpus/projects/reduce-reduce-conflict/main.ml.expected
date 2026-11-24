@@ -1,0 +1,32 @@
+out: Warning: one state has reduce/reduce conflicts.
+    Warning: one reduce/reduce conflict was arbitrarily resolved.
+    File "parser.mly", line 7, characters 3-10:
+    Warning: production b -> NUM is never reduced.
+    Warning: in total, 1 production is never reduced.
+    
+    ** Conflict (reduce/reduce) in state 1.
+    ** Token involved: EOF
+    ** This state is reached from main after reading:
+    
+    NUM
+    
+    ** The derivations that appear below have the following common factor:
+    ** (The question mark symbol (?) represents the spot where the derivations begin to differ.)
+    
+    main 
+    (?)
+    
+    ** In state 1, looking ahead at EOF, reducing production
+    ** a -> NUM
+    ** is permitted because of the following sub-derivation:
+    
+    a EOF // lookahead token appears
+    NUM . 
+    
+    ** In state 1, looking ahead at EOF, reducing production
+    ** b -> NUM
+    ** is permitted because of the following sub-derivation:
+    
+    b EOF // lookahead token appears
+    NUM .
+out: 1

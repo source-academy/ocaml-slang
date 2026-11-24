@@ -189,8 +189,9 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
   conflicts) is sent as output; its failure is an error with its message.
 * Menhir's errors and conflict warnings are reported with file, line, and column. The `.conflicts`
   report (`--explain`) is shown to the student.
-* The generated `.ml` files can be viewed, since students should be able to read what Menhir
-  produced.
+* The generated `.ml` and `.mli` files are not shown in v1 (decision on #18): the conductor and
+  frontend have no place for them besides the editor tabs and the REPL, and no other tabs for now.
+  What a student sees of the tools is their messages, warnings and the `--explain` report.
 * Tests: CS4212-style grammars with and without conflicts, and a lexer and parser for a toy language
   run end to end.
 
