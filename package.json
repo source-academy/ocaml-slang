@@ -12,8 +12,7 @@
   "scripts": {
     "build:ocaml": "bash scripts/build-ocaml.sh",
     "build:evaluator": "rollup -c rollup.config.mjs",
-    "build:docs": "mkdir -p dist/docs && cp site/*.html dist/docs/",
-    "build": "yarn build:ocaml && yarn build:tools && yarn build:evaluator && yarn build:docs",
+    "build": "yarn build:ocaml && yarn build:tools && yarn build:evaluator",
     "test": "jest",
     "lint": "eslint --concurrency=auto src",
     "typecheck": "tsc --noEmit -p tsconfig.test.json && tsc --noEmit",
