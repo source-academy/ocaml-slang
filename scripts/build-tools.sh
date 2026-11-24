@@ -10,27 +10,33 @@ OCAML=ocaml-compiler.5.5.2
 WORK=.tools
 mkdir -p "$WORK" dist
 
+# The work directories are named by the versions, so that sources of an older pin are not reused.
+MENHIR_DIR="$WORK/$MENHIR"
+OCAMLLEX_DIR="$WORK/ocamllex-$OCAML"
+
 # Menhir: its stage 2 executable, built to JS as well, with the host stub.
-if [ ! -d "$WORK/menhir" ]; then
-  opam source "$MENHIR" --dir "$WORK/menhir"
-  sed -i.bak 's/^  (name main)$/  (name main)\n  (modes exe js)\n  (js_of_ocaml (javascript_files jsoo-host.js))/' "$WORK/menhir/executable/stage2/dune"
-  rm -f "$WORK/menhir/executable/stage2/dune.bak"
-  grep -q jsoo-host.js "$WORK/menhir/executable/stage2/dune"
+if [ ! -d "$MENHIR_DIR" ]; then
+  opam source "$MENHIR" --dir "$MENHIR_DIR"
+  sed -i.bak 's/^  (name main)$/  (name main)\n  (modes exe js)\n  (js_of_ocaml (javascript_files jsoo-host.js))/' "$MENHIR_DIR/executable/stage2/dune"
+  rm -f "$MENHIR_DIR/executable/stage2/dune.bak"
+  grep -q jsoo-host.js "$MENHIR_DIR/executable/stage2/dune"
 fi
-cp tools/jsoo-host.js "$WORK/menhir/executable/stage2/"
-(cd "$WORK/menhir" && dune build --root . --profile release ./executable/stage2/main.bc.js)
-cp -f "$WORK/menhir/_build/default/executable/stage2/main.bc.js" dist/menhir.js
+cp tools/jsoo-host.js "$MENHIR_DIR/executable/stage2/"
+(cd "$MENHIR_DIR" && dune build --root . --profile release ./executable/stage2/main.bc.js)
+cp -f "$MENHIR_DIR/_build/default/executable/stage2/main.bc.js" dist/menhir.js
 
 # ocamllex: the sources of OCaml's lex/, as a program of its own.
-if [ ! -d "$WORK/ocamllex" ]; then
-  opam source "$OCAML" --dir "$WORK/ocaml-src"
-  mkdir -p "$WORK/ocamllex"
-  cp "$WORK"/ocaml-src/lex/*.{ml,mli,mll,mly} "$WORK/ocamllex/"
-  echo '(lang dune 3.25)' > "$WORK/ocamllex/dune-project"
-  printf '(ocamlyacc parser)\n(ocamllex lexer)\n(executable\n (name main)\n (modes byte exe js)\n (js_of_ocaml (javascript_files jsoo-host.js)))\n' > "$WORK/ocamllex/dune"
+if [ ! -d "$OCAMLLEX_DIR" ]; then
+  SRC="$WORK/$OCAML"
+  rm -rf "$SRC"
+  opam source "$OCAML" --dir "$SRC"
+  mkdir -p "$OCAMLLEX_DIR"
+  cp "$SRC"/lex/*.{ml,mli,mll,mly} "$OCAMLLEX_DIR/"
+  echo '(lang dune 3.25)' > "$OCAMLLEX_DIR/dune-project"
+  printf '(ocamlyacc parser)\n(ocamllex lexer)\n(executable\n (name main)\n (modes byte exe js)\n (js_of_ocaml (javascript_files jsoo-host.js)))\n' > "$OCAMLLEX_DIR/dune"
 fi
-cp tools/jsoo-host.js "$WORK/ocamllex/"
-(cd "$WORK/ocamllex" && dune build --root . --profile release ./main.bc.js)
-cp -f "$WORK/ocamllex/_build/default/main.bc.js" dist/ocamllex.js
+cp tools/jsoo-host.js "$OCAMLLEX_DIR/"
+(cd "$OCAMLLEX_DIR" && dune build --root . --profile release ./main.bc.js)
+cp -f "$OCAMLLEX_DIR/_build/default/main.bc.js" dist/ocamllex.js
 chmod u+w dist/menhir.js dist/ocamllex.js
 echo "built dist/menhir.js ($(wc -c < dist/menhir.js) bytes) and dist/ocamllex.js ($(wc -c < dist/ocamllex.js) bytes)"

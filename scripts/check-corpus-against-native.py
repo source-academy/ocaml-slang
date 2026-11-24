@@ -98,7 +98,7 @@ for expected_path in sorted(glob.glob(f"{root}/projects/*/*.ml.expected")):
                         done.add(stem)
                         shutil.copy(f, tmp)
                         if f.endswith(".mll"):
-                            tool_stderr += subprocess.run(["ocamllex", "-q", f"{tmp}/{stem}"], check=True, capture_output=True, text=True).stderr
+                            tool_stderr += subprocess.run(["ocamllex", "-ml", "-q", f"{tmp}/{stem}"], check=True, capture_output=True, text=True).stderr
                         if f.endswith(".mly"):
                             tool_stderr += subprocess.run(["menhir", "--table", stem], check=True, capture_output=True, text=True, cwd=tmp).stderr
                         todo.append(stem)
