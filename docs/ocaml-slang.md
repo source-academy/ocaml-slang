@@ -213,7 +213,7 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
 
 #### Multi-file assessments (deferred, #22)
 
-Not part of v1: the backend has no multi-file grading. What follows is the design to start from.
+Not part of v1: the backend has no multi-file grading (backend#1390). What follows is the design to start from.
 
 Today a programming question has one template, prepend and postpend, and an answer is one string
 (`ProgrammingAnswer.code`); the assessment workspace uses only the first editor tab (its code has
