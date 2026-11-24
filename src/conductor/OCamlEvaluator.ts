@@ -61,7 +61,12 @@ export class OCamlEvaluator extends BasicEvaluator {
         if (mode === "chunk") out(r.result);
         this.conductor.sendError(new OCamlError(r.error, code));
       } else {
-        out(mode === "file" ? (r.value ?? "") : r.result);
+        // A value whose printer prints nothing is still the result: send it, though it is empty.
+        if (mode === "file") {
+          if (r.value !== null) this.conductor.sendOutput(r.value.replace(/\n$/, ""));
+        } else {
+          out(r.result);
+        }
       }
     } catch (e) {
       this.fail(e);

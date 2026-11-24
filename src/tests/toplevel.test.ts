@@ -171,6 +171,15 @@ describe("sessions and chunks", () => {
     expect(chunk.outputs[chunk.outputs.length - 1].endsWith("=  X")).toBe(true);
   });
 
+  test("a value whose printer prints nothing is still the result of a run", async () => {
+    const { conductor, outputs } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateFile(
+      "main.ml",
+      'type e = E;; let pp _ E = ();; #install_printer pp;; print_endline "earlier";; E;;',
+    );
+    expect(outputs).toEqual(["earlier", ""]);
+  });
+
   test("modUse returns the signature it prints", () => {
     g.ocaml!.writeFile("/static/m4.ml", "let m4 = 42;;");
     expect(g.ocaml!.modUse("/static/m4.ml")).toContain("module M4");
