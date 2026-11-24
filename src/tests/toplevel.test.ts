@@ -134,9 +134,7 @@ describe("sessions and chunks", () => {
     await ev.evaluateFile("main.ml", "let g3 = function Some x -> x;;");
     expect(outputs.join("")).toContain("Warning 8");
     await ev.evaluateChunk("let rec cyc : 'a list as 'a = [];;");
-    expect(errors.map(e => e.message).join("\n")).toContain(
-      "contains a type variable that cannot be generalized",
-    );
+    expect(errors.map(e => e.message).join("\n")).toContain("occurs inside");
   });
 
   test("a new session still has MenhirLib and the Stdlib", async () => {
