@@ -1,0 +1,2 @@
+; The OCaml side lives in ocaml/. The TypeScript side (src/) is built with yarn.
+(dirs ocaml)

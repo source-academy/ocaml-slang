@@ -1,0 +1,17 @@
+{
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "coverage", "src/tests"],
+  "compilerOptions": {
+    "target": "es2020",
+    "lib": ["es2020", "dom"],
+    "module": "ESNext",
+    "rootDir": "src",
+    "moduleResolution": "bundler",
+    "declaration": false,
+    "outDir": "dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true
+  }
+}
