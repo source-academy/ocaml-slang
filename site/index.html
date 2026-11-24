@@ -45,12 +45,15 @@ prints, and the value of the last expression (without its type):</p>
 expression after a definition needs <code>;;</code> (or <code>let () = ...</code>), exactly as in an OCaml file.</p>
 <p>The <strong>REPL</strong> works as the <code>ocaml</code> toplevel does: type phrases ending in <code>;;</code> and see
 <code>val x : int = 3</code>, <code>- : int = 120</code> and so on, with their types. It keeps what the last
-run and earlier phrases defined. A run starts a new session. Phrases of one REPL entry are
-checked first: if one has a syntax or type error, none of them runs.</p>
+run and earlier phrases defined. A run starts a new session. The phrases of one REPL entry are
+checked before any runs, so a syntax or type error means that none of them runs. The check stops at a directive
+(<code>#warnings</code>, <code>#use</code>, ...): the phrases before it run, and an error after it is found only then.</p>
 <p>Errors come with OCaml's own message and a position in the editor. Warnings (unused variable, non-exhaustive
-match, ...) are shown as OCaml prints them. The toplevel directives <code>#use</code>, <code>#warnings</code>,
+match, ...) are shown as OCaml prints them. The toplevel directives <code>#warnings</code>,
 <code>#rectypes</code>, <code>#show</code> and <code>#print_depth</code> work; <code>#require</code> and
-<code>#load</code> do not (see below).</p>
+<code>#load</code> do not (see below). <code>#use</code> reads only files in the program's own in-memory file system
+(for example one that the program wrote), <em>not</em> the files of the playground: to use another file of yours,
+make it a module (see <a href="#files">programs of several files</a>).</p>
 
 <h2 id="available">What is available</h2>
 <ul>
