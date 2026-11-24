@@ -1,7 +1,8 @@
 import type { ConductorError } from "@sourceacademy/conductor/common";
 import type { IRunnerPlugin } from "@sourceacademy/conductor/runner";
-import { existsSync } from "fs";
-import { resolve } from "path";
+import { copyFileSync, existsSync, mkdtempSync } from "fs";
+import { tmpdir } from "os";
+import { join, resolve } from "path";
 import { OCamlEvaluator } from "../conductor/OCamlEvaluator";
 import { moduleOfFile } from "../conductor/project";
 
@@ -25,7 +26,10 @@ function setup(folder: Record<string, string>) {
 
 describe("programs of several files", () => {
   beforeAll(() => {
-    if (!existsSync(bundle)) throw new Error(`${bundle} is missing: run 'yarn build:ocaml' first`);
+    for (const f of ["ocaml-toplevel.js", "menhir.js", "ocamllex.js"]) {
+      const file = resolve(__dirname, "../../dist", f);
+      if (!existsSync(file)) throw new Error(`${file} is missing: run 'yarn build' first`);
+    }
     (globalThis as { OCAML_SLANG_TOPLEVEL_URL?: string }).OCAML_SLANG_TOPLEVEL_URL = bundle;
   });
 
@@ -43,8 +47,17 @@ describe("programs of several files", () => {
     await evaluator.evaluateFile("/w/proj/main.ml", "let () = print_int Util.v");
     expect(outputs).toEqual(["1"]);
     expect(requested.every(p => p.startsWith("/w/proj/"))).toBe(true);
-    // `util.ml` is found, so `Util.ml` is not needed; the interface is looked for under both names
-    expect(requested.sort()).toEqual(["/w/proj/Util.mli", "/w/proj/util.ml", "/w/proj/util.mli"]);
+    // `util.ml` is found, so `Util.ml` is not needed; the interface, and the sources of ocamllex and
+    // Menhir (which a `.ml` must not share a module with), are looked for under both names
+    expect(requested.sort()).toEqual([
+      "/w/proj/Util.mli",
+      "/w/proj/Util.mll",
+      "/w/proj/Util.mly",
+      "/w/proj/util.ml",
+      "/w/proj/util.mli",
+      "/w/proj/util.mll",
+      "/w/proj/util.mly",
+    ]);
   });
 
   test("a file is not requested twice, and the Stdlib is not a project module", async () => {
@@ -124,5 +137,85 @@ describe("programs of several files", () => {
     } as unknown as IRunnerPlugin;
     await new OCamlEvaluator(conductor).evaluateFile("/p/main.ml", "let () = print_int (1 + 1)");
     expect(outputs).toEqual(["2"]);
+  });
+
+  const GRAMMAR = (action: string) =>
+    `%token <int> NUM\n%token EOF\n%start <int> main\n%%\nmain: n = NUM EOF { ${action} }\n`;
+  const MAIN =
+    'let () = print_int (Parser.main (let t = ref [Parser.NUM 20; Parser.EOF] in fun _ -> match !t with x :: r -> t := r; x | [] -> Parser.EOF) (Lexing.from_string ""))';
+
+  test("a .mly is made into a parser with Menhir, a .mll into a lexer with ocamllex", async () => {
+    const { evaluator, outputs, errors } = setup({
+      "/p/parser.mly": GRAMMAR("n + 1"),
+      "/p/lexer.mll":
+        "{ let seen = ref 0 }\nrule t = parse ['a'-'z']+ as w { incr seen; w } | eof { \"\" }",
+      "/p/main.ml": MAIN + '\nlet () = print_string (Lexer.t (Lexing.from_string "abc"))',
+    });
+    await evaluator.evaluateFile(
+      "/p/main.ml",
+      MAIN + '\nlet () = print_string (Lexer.t (Lexing.from_string "abc"))',
+    );
+    expect(errors).toEqual([]);
+    expect(outputs).toEqual(["21", "abc"]);
+  });
+
+  test("a changed grammar makes a different parser: what is generated depends on the text", async () => {
+    const folder: Record<string, string> = {
+      "/p/parser.mly": GRAMMAR("n + 1"),
+      "/p/main.ml": MAIN,
+    };
+    const { evaluator, outputs } = setup(folder);
+    await evaluator.evaluateFile("/p/main.ml", MAIN);
+    folder["/p/parser.mly"] = GRAMMAR("n * 2");
+    await evaluator.evaluateFile("/p/main.ml", MAIN);
+    await evaluator.evaluateFile("/p/main.ml", MAIN);
+    expect(outputs).toEqual(["21", "40", "40"]);
+  });
+
+  test("an error in a semantic action is in the .mly, at its line and column", async () => {
+    const { evaluator, errors } = setup({ "/p/parser.mly": GRAMMAR('n ^ "x"') });
+    await evaluator.evaluateFile("/p/main.ml", MAIN);
+    expect(errors[0].file).toBe("parser.mly");
+    expect(errors[0].message).toMatch(/^File "parser.mly", line 5, characters 20-21:\nError: /);
+  });
+
+  test("the tools are loaded from next to the toplevel, and a failure to load is an error that the next run recovers from", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ocaml-slang-tools-"));
+    const g = globalThis as { OCAML_SLANG_TOPLEVEL_URL?: string };
+    const saved = g.OCAML_SLANG_TOPLEVEL_URL;
+    g.OCAML_SLANG_TOPLEVEL_URL = join(dir, "ocaml-toplevel.js"); // there is no menhir.js beside it yet
+    try {
+      const { evaluator, outputs, errors } = setup({ "/p/parser.mly": GRAMMAR("n") });
+      await evaluator.evaluateFile("/p/main.ml", MAIN);
+      expect(errors[0].message).toContain("Could not load menhir");
+      copyFileSync(resolve(__dirname, "../../dist/menhir.js"), join(dir, "menhir.js"));
+      await evaluator.evaluateFile("/p/main.ml", MAIN);
+      expect(errors).toHaveLength(1);
+      expect(outputs).toEqual(["20"]);
+    } finally {
+      g.OCAML_SLANG_TOPLEVEL_URL = saved;
+    }
+  });
+
+  test("a failing tool is an error with the tool's message; the toplevel and the next run are not harmed", async () => {
+    const folder: Record<string, string> = {
+      "/p/parser.mly": "%token A\n%%\nmain: A %% {",
+      "/p/main.ml": MAIN,
+    };
+    const { evaluator, outputs, errors } = setup(folder);
+    await evaluator.evaluateFile("/p/main.ml", MAIN);
+    expect(errors[0].message).toMatch(/^Error in parser.mly:\nFile "parser.mly"/);
+    folder["/p/parser.mly"] = GRAMMAR("n");
+    await evaluator.evaluateFile("/p/main.ml", MAIN);
+    expect(outputs).toEqual(["20"]);
+  });
+
+  test("a .ml and a .mll for the same module are an error", async () => {
+    const { evaluator, errors } = setup({
+      "/p/lexer.ml": "let x = 1",
+      "/p/lexer.mll": "rule t = parse eof { () }",
+    });
+    await evaluator.evaluateFile("/p/main.ml", "let () = print_int Lexer.x");
+    expect(errors[0].message).toBe("Error: lexer.ml and lexer.mll both define the module Lexer");
   });
 });

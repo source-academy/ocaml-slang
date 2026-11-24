@@ -62,6 +62,34 @@ for expected_path in sorted(glob.glob(f"{root}/projects/*/*.ml.expected")):
     expected = open(expected_path).read()
     if re.search(r"^error", expected, re.M):
         continue
+    generated = glob.glob(f"{directory}/*.mll") + glob.glob(f"{directory}/*.mly")
+    if generated:
+        # Lexers and parsers: made natively with ocamllex and Menhir (--table), then everything is compiled
+        # with MenhirLib, in a copy. This checks the tools that run in the browser against the native ones.
+        with tempfile.TemporaryDirectory() as tmp:
+            for f in glob.glob(f"{directory}/*"):
+                if not f.endswith(".expected"):
+                    shutil.copy(f, tmp)
+            tool_stderr = ""  # what the tools say, as the evaluator sends it as output
+            for f in glob.glob(f"{tmp}/*.mll"):
+                tool_stderr += subprocess.run(["ocamllex", "-q", f], check=True, capture_output=True, text=True).stderr
+            for f in glob.glob(f"{tmp}/*.mly"):
+                tool_stderr += subprocess.run(["menhir", "--table", f], check=True, capture_output=True, text=True, cwd=tmp).stderr
+            sources = [os.path.basename(f) for f in glob.glob(f"{tmp}/*.ml") + glob.glob(f"{tmp}/*.mli")]
+            entry_name = os.path.basename(entry)
+            order = subprocess.run(["ocamldep", "-sort"] + [f for f in sources if f != entry_name], capture_output=True, text=True, cwd=tmp).stdout.split()
+            exe = os.path.join(tmp, "program")
+            build = subprocess.run(
+                ["ocamlfind", "ocamlopt", "-package", "menhirLib", "-linkpkg", "-w", "-a", "-o", exe] + order + [entry_name],
+                capture_output=True, text=True, cwd=tmp)
+            if build.returncode != 0:
+                different += 1
+                print("DOES NOT COMPILE", entry, build.stderr[:300])
+                continue
+            run = subprocess.run([exe], capture_output=True, text=True)
+            compare(entry, expected, run.stdout, run.stderr + build.stderr + tool_stderr)
+        continue
+
     names = {os.path.basename(f)[0].upper() + os.path.basename(f)[1:].split(".")[0]: f for f in glob.glob(f"{directory}/*.ml")}
     def modules_of(f):
         out = subprocess.run(["ocamldep", "-modules", f], capture_output=True, text=True)

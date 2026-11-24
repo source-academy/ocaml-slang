@@ -1,0 +1,4 @@
+error: Error in lexer.mll:
+    ocamllex warning:
+    File "lexer.mll", line 3, character 19: unescaped newline in string.
+    File "lexer.mll", line 3, character 6: unterminated string.

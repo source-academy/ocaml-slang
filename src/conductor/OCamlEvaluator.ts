@@ -3,6 +3,7 @@ import { BasicEvaluator, type IRunnerPlugin } from "@sourceacademy/conductor/run
 import { OCamlError } from "./errors";
 import { loadToplevel } from "./loader";
 import { discoverProject } from "./project";
+import { Tools } from "./tools";
 import type { RunResult, Toplevel } from "./toplevel";
 
 /**
@@ -17,6 +18,8 @@ import type { RunResult, Toplevel } from "./toplevel";
  */
 export class OCamlEvaluator extends BasicEvaluator {
   private loading?: Promise<Toplevel>;
+  /** menhir and ocamllex, for the `.mly` and `.mll` files of a program (fetched when one needs them). */
+  private readonly tools = new Tools();
 
   constructor(conductor: IRunnerPlugin) {
     super(conductor);
@@ -48,6 +51,7 @@ export class OCamlEvaluator extends BasicEvaluator {
         path => this.requestFile(path),
         fileName,
         fileContent,
+        this.tools,
       );
       if ("failure" in project) {
         const failure = project.failure;
@@ -58,6 +62,8 @@ export class OCamlEvaluator extends BasicEvaluator {
         );
         return;
       }
+      // What the tools said although they succeeded (Menhir's warnings about conflicts)
+      for (const { text } of project.notes) this.out(text);
       if (project.modules.length === 0) return await this.run(fileContent, "file");
       const { modules } = project;
       this.show(
