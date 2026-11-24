@@ -26,13 +26,14 @@ norm = lambda s: re.sub(r"\s+", " ", re.sub(r'(File "[^"]*", l|L)ine \d+, charac
 checked = different = 0
 
 
-def compare(label, expected, native_stdout, native_stderr):
-    """Whether our messages, less what native OCaml put on stderr, are its output (and maybe the last value)."""
+def compare(label, expected, native_stdout, native_stderr, notes=()):
+    """Whether our messages, less what native OCaml put on stderr, are its output (and maybe the last value).
+    `notes` are what each run of a tool (ocamllex, Menhir) said: the evaluator sends each as one message."""
     global checked, different
     # native OCaml quotes the source under a location (`1 | let ...` and a line of ^^^); the toplevel does not
     stderr = "\n".join(l for l in native_stderr.split("\n") if not re.match(r"^\s*(\d+ \|.*|\^+)\s*$", l))
     # what native OCaml wrote to stderr, as blocks (a warning is several lines) and as single lines
-    native_err = {norm(b) for b in re.split(r"\n\s*\n|\n(?=File )", stderr)} | {norm(l) for l in stderr.split("\n")} | {norm(stderr)}
+    native_err = {norm(b) for b in re.split(r"\n\s*\n|\n(?=File )", stderr)} | {norm(l) for l in stderr.split("\n")} | {norm(n) for n in notes}
     # the messages of the evaluator: `out: text`, with the further lines of a message indented
     messages = re.split(r"^out: ", "\n".join(l for l in expected.split("\n") if not l.startswith("--- ")), flags=re.M)[1:]
     messages = [m.replace("\n    ", "\n") for m in messages]
@@ -75,7 +76,7 @@ for expected_path in sorted(glob.glob(f"{root}/projects/*/*.ml.expected")):
         # in a copy that holds only the files that the entry refers to (the evaluator reads no others). This
         # checks the tools that run in the browser against the native ones.
         with tempfile.TemporaryDirectory() as tmp:
-            tool_stderr = ""  # what the tools say, as the evaluator sends it as output
+            tool_notes = []  # what each run of a tool says: the evaluator sends each as one message
             entry_name = os.path.basename(entry)
             shutil.copy(entry, tmp)
             by_module = {}
@@ -98,12 +99,13 @@ for expected_path in sorted(glob.glob(f"{root}/projects/*/*.ml.expected")):
                         done.add(stem)
                         shutil.copy(f, tmp)
                         if f.endswith(".mll"):
-                            tool_stderr += subprocess.run(["ocamllex", "-ml", "-q", f"{tmp}/{stem}"], check=True, capture_output=True, text=True).stderr
+                            tool_notes.append(subprocess.run(["ocamllex", "-ml", "-q", f"{tmp}/{stem}"], check=True, capture_output=True, text=True).stderr)
                         if f.endswith(".mly"):
-                            tool_stderr += subprocess.run(["menhir", "--table", "--explain", stem], check=True, capture_output=True, text=True, cwd=tmp).stderr
+                            note = subprocess.run(["menhir", "--table", "--explain", stem], check=True, capture_output=True, text=True, cwd=tmp).stderr
                             report = f"{tmp}/{stem[:-4]}.conflicts"  # what --explain wrote, which the evaluator sends too
                             if os.path.exists(report):
-                                tool_stderr += "\n" + open(report).read()
+                                note += "\n" + open(report).read()
+                            tool_notes.append(note)
                         todo.append(stem)
             sources = [os.path.basename(f) for f in glob.glob(f"{tmp}/*.ml") + glob.glob(f"{tmp}/*.mli")]
             order = subprocess.run(["ocamldep", "-sort"] + [f for f in sources if f != entry_name], capture_output=True, text=True, cwd=tmp).stdout.split()
@@ -116,7 +118,7 @@ for expected_path in sorted(glob.glob(f"{root}/projects/*/*.ml.expected")):
                 print("DOES NOT COMPILE", entry, build.stderr[:300])
                 continue
             run = subprocess.run([exe], capture_output=True, text=True)
-            compare(entry, expected, run.stdout, run.stderr + build.stderr + tool_stderr)
+            compare(entry, expected, run.stdout, run.stderr + build.stderr, tool_notes)
         continue
 
     names = {os.path.basename(f)[0].upper() + os.path.basename(f)[1:].split(".")[0]: f for f in glob.glob(f"{directory}/*.ml")}
