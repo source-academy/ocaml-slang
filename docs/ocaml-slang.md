@@ -52,7 +52,7 @@ checker is never ours to maintain.
 | Repository | `source-academy/ocaml-slang`, public: the OCaml build (dune), the TypeScript conductor wrapper, tests, and deployment of the evaluators to GitHub Pages. |
 | Libraries | `Stdlib` and MenhirLib are preloaded. No `Unix` and no `Thread`. Others (`Str`) are added on request. |
 | Menhir back-end | `--table` with the preloaded MenhirLib by default. The code back-end needs Menhir's `--infer-write-query`/`--infer-read-reply` protocol answered by the in-browser type checker (a later phase). |
-| Autograding | Part of v1, including answers of several files. |
+| Autograding | Part of v1 for questions of one file. Several files per question or answer are deferred (#22): the backend has no multi-file grading yet. |
 | Error messages | OCaml's own errors and warnings, unchanged. For a compiler course these are the right messages to learn. |
 
 ### Decided with the CS4212 teaching team (#6)
@@ -67,17 +67,17 @@ checker is never ours to maintain.
   of the folder that the open file depends on, directly or not (`.ml` with its `.mli`, and the `.ml`
   files generated from `.mll` and `.mly`), as modules in dependency order, and runs the open file last,
   as `dune exec` would with it as the executable. There is no configuration file.
-* **Multi-file answers in assessments are part of v1.** A CS4212 question can have several files
-  (lexer, parser, AST, driver), some given and fixed, some for the student to write. This is a
-  Source Academy feature that is not specific to OCaml (Python's folder imports can use it too), and it
-  needs work in the backend, the frontend and the grader: see "Multi-file assessments" under phase 4.
+* **Multi-file answers in assessments are deferred (decision on #22).** v1 grades questions of one
+  file. A CS4212 question with several files (lexer, parser, AST, driver), some given and fixed, some
+  for the student to write, is a Source Academy feature that is not specific to OCaml, and needs work
+  in the backend, the frontend and the grader, none of which has it yet: see "Multi-file assessments"
+  under phase 4. Multi-file *programs* in the playground are part of v1.
 * **Nothing outside ocaml-slang is specific to OCaml.** The backend, the frontend and the grader stay
   language-agnostic. A question names its languages and evaluators by their ids in the language
   directory, for the student, the frontend grader and the backend grader (backend#1387), and the
   backend passes them on unchanged. The grader runs whichever conductor evaluator the event names, in
   a Node host (grader#415), so there is no `ocamlGrader`: OCaml's evaluator only has to run under that
-  host. The general changes that OCaml needs (#1387, frontend#4560, grader#415, and multi-file
-  questions) are features for every language, tracked here as dependencies.
+  host. The general changes that OCaml needs (#1387, frontend#4560, grader#415) are features for every language, tracked here as dependencies.
 
 ## Architecture
 
@@ -195,10 +195,10 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
 * Tests: CS4212-style grammars with and without conflicts, and a lexer and parser for a toy language
   run end to end.
 
-### Phase 4: autograding (about 2.5 weeks)
+### Phase 4: autograding (about 1 week)
 
 * **Testcase semantics**: a testcase is OCaml phrases run after the program (prepend, student
-  program, postpend; or, for a question of several files, after the entry file), in the same toplevel
+  program, postpend), in the same toplevel
   session. Its result is the value of its last phrase, printed as decided above, and is compared with
   the expected answer.
 * **In ocaml-slang**: the evaluator runs under the grader's Node host (no browser-only APIs on the
@@ -211,7 +211,9 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
   * grader#415: the grader runs any conductor evaluator that the event names, in a Node host, with a
     timeout, instead of one grader per language.
 
-#### Multi-file assessments
+#### Multi-file assessments (deferred, #22)
+
+Not part of v1: the backend has no multi-file grading. What follows is the design to start from.
 
 Today a programming question has one template, prepend and postpend, and an answer is one string
 (`ProgrammingAnswer.code`); the assessment workspace uses only the first editor tab (its code has
@@ -269,8 +271,7 @@ Not OCaml-specific: Python with folder imports can use the same questions.
 ## Effort
 
 About **10 weeks** of work for one experienced developer: phase 0, 1 week; phase 1, 2 weeks;
-phase 2, 1 week; phase 3, 2 weeks; phase 4, 2.5 weeks (1 for the general grading changes, 1.5 for
-multi-file assessments across the backend, frontend and grader); phase 5, 3 days. The target is 2 December 2026,
+phase 2, 1 week; phase 3, 2 weeks; phase 4, 1 week for the general grading changes (multi-file assessments, 1.5 weeks more, are deferred); phase 5, 3 days. The target is 2 December 2026,
 so the work has to run in parallel: phase 4's backend, frontend and grader work starts now, against
 the design above, alongside phases 0 to 3.
 
@@ -288,5 +289,5 @@ the design above, alongside phases 0 to 3.
 * **Version drift.** The toplevel, js_of_ocaml, and Menhir are pinned together, and an upgrade is a
   deliberate change with the test corpus as its check.
 * **Multi-file assessments** are the largest piece outside this repository: a new question and answer
-  format in the backend, folder mode in the assessment workspace, and the grader. They are on the
-  critical path to 2 December, and depend on backend#1367 being merged.
+  format in the backend, folder mode in the assessment workspace, and the grader. They are deferred out
+  of v1 (#22), which grades single files; they depend on backend#1367 being merged.
