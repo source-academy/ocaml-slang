@@ -7,6 +7,8 @@ export interface ToplevelError {
   column: number;
   endLine: number;
   endColumn: number;
+  /** The file of the location, if it is not the entry (or a chunk): `lexer.ml`. */
+  file: string;
 }
 
 export interface RunResult {
@@ -26,6 +28,28 @@ export interface Toplevel {
    * phrase runs. What the program prints, and the warnings, go to `onOutput` as they are flushed.
    */
   run(code: string, onOutput: (text: string) => void): RunResult;
+  /**
+   * The module names that a file refers to, as `ocamldep` finds them, or the syntax error that stops
+   * that. `entry` is the file that is run, which is read as the toplevel reads a file.
+   */
+  dependencies(
+    file: string,
+    source: string,
+    kind: "ml" | "mli" | "entry",
+  ): { deps: string[]; error: ToplevelError | null };
+  /**
+   * Runs the modules of a program of several files (in the order given, dependencies first), and then
+   * the entry; all are checked before any runs. `mliFiles[i]` is "" if module i has no interface.
+   */
+  runProgram(
+    names: string[],
+    files: string[],
+    mls: string[],
+    mliFiles: string[],
+    mlis: string[],
+    entry: string,
+    onOutput: (text: string) => void,
+  ): RunResult;
   /** Starts a new session: the environment and settings as they were when the toplevel started. */
   reset(): void;
   writeFile(path: string, content: string): void;

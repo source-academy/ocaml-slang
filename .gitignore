@@ -9,3 +9,11 @@ coverage/
 !.yarn/releases
 !.yarn/patches
 !.yarn/plugins
+
+# built by tools that are run on the corpus
+*.cmi
+*.cmx
+*.cmo
+*.cmt
+*.cmti
+*.o

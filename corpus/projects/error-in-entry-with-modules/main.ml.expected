@@ -1,0 +1,2 @@
+error 2:14-2:28: Error: This expression has type string but an expression was expected of type
+             int

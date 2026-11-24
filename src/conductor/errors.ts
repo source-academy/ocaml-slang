@@ -24,18 +24,38 @@ export class OCamlError extends ConductorError {
   column?: number;
   endLine?: number;
   endColumn?: number;
+  /** The file of the error, if it is not the entry (`lexer.ml`); then there is no `line` and `column`. */
+  file?: string;
   rawMessage: string;
 
-  /** `source` is the text that was run, to convert the columns from bytes to editor characters. */
-  constructor(error: ToplevelError, source: string) {
-    super(error.message);
+  /**
+   * `source` is the text of the entry (or the chunk), to convert the columns from bytes to editor
+   * characters; `others` has the text of the other files by name. An error in another file names
+   * the file in its message (as OCaml does) and has no line and column: the editor shows the entry,
+   * so a line number of another file would point at the wrong place.
+   */
+  constructor(error: ToplevelError, source: string, others: Record<string, string> = {}) {
+    const foreign = error.file !== "" && error.file !== undefined && error.line > 0;
+    const text = foreign ? (others[error.file] ?? "") : source;
+    const start = editorColumn(text, error.line, error.column);
+    const end = editorColumn(text, error.endLine, error.endColumn);
+    const message = foreign
+      ? `File "${error.file}", ${
+          error.line === error.endLine
+            ? `line ${error.line}`
+            : `lines ${error.line}-${error.endLine}`
+        }, characters ${start}-${end}:\n${error.message}`
+      : error.message;
+    super(message);
     this.name = "OCamlError";
-    this.rawMessage = error.message;
-    if (error.line > 0) {
+    this.rawMessage = message;
+    if (foreign) {
+      this.file = error.file;
+    } else if (error.line > 0) {
       this.line = error.line;
-      this.column = editorColumn(source, error.line, error.column);
+      this.column = start;
       this.endLine = error.endLine;
-      this.endColumn = editorColumn(source, error.endLine, error.endColumn);
+      this.endColumn = end;
     }
   }
 }

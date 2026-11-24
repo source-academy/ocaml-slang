@@ -7,9 +7,19 @@
                               result  the phrases' results in the toplevel's style ("- : int = 6")
                               value   the last phrase's value without its type ("6") if that phrase is an
                                       expression whose type is not unit, else null
-                              error   null, or {message, line, column, endLine, endColumn}: OCaml's
-                                      message, and its location (1-based lines, 0-based columns, in
-                                      bytes of the UTF-8 source; line is 0 if there is none)
+                              error   null, or {message, line, column, endLine, endColumn, file}:
+                                      OCaml's message, and its location (1-based lines, 0-based
+                                      columns, in bytes of the UTF-8 source; line is 0 if there is
+                                      none; file is "" for the entry and for chunks)
+     dependencies(file, source, kind)
+                            the module names that a file refers to, as ocamldep finds them (kind
+                            is "ml", "mli", or "entry" for the file that is run):
+                              {deps, error}  (error as above, with `file`)
+     runProgram(names, files, mls, mliFiles, mlis, entry, onOutput)
+                            run(code) for a program of several files: the modules (names, the
+                            file names to show, the .ml and .mli sources; mliFiles[i] is "" if
+                            there is no .mli) in the order given, then the entry; all are checked
+                            before any runs
      reset()                start a new session
      writeFile(path, text)  put a file on the pseudo file system
      modUse(path)           load path.ml as a module (like #mod_use) *)
@@ -103,7 +113,11 @@ let error_of_exn exn =
             { Location.batch_mode_printer with pp_main_loc = (fun _ _ _ _ -> ()) }
           in
           { message = String.trim (Format.asprintf "@[<v>%a@]" (printer.pp printer) report);
-            loc = Some report.main.loc }
+            loc =
+              (let l = report.main.loc in
+               (* Location.none, and the like, are not a place *)
+               if l.loc_start.pos_lnum <= 0 || l.loc_start.pos_fname = "_none_" then None
+               else Some l) }
       | _ -> { message = Printexc.to_string exn; loc = None })
 
 (* A chunk is rejected as a whole: its phrases are parsed (a syntax error rejects it) and then
@@ -139,11 +153,16 @@ let is_unit_expression env = function
       with _ -> false)
   | Parsetree.Ptop_dir _ -> false
 
+(* The exception of the phrase, counting from 0, that failed to type check. *)
+exception Check_failed of int * exn
+
 (* Checks the phrases up to the first directive; returns how many it checked. *)
 let check phrases =
   without_warnings (fun () ->
       let rec go n env = function
-        | (Parsetree.Ptop_def _ as ph) :: rest -> go (n + 1) (typecheck env ph) rest
+        | (Parsetree.Ptop_def _ as ph) :: rest ->
+            let env = try typecheck env ph with e -> raise (Check_failed (n, e)) in
+            go (n + 1) env rest
         | Parsetree.Ptop_dir _ :: _ | [] -> n
       in
       go 0 !Toploop.toplevel_env phrases)
@@ -158,7 +177,15 @@ let is_expression = function
 
 type outcome = { result : string; value : string option; error : error option }
 
-let run code on_output =
+(* The start of a file, as a place: line 1, column 0. *)
+let file_start file =
+  let pos = { Lexing.pos_fname = file; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 } in
+  { Location.loc_start = pos; loc_end = pos; loc_ghost = false }
+
+(* [files] names the files of the first phrases, if they are the modules of a program: an error of a
+   module that has no location of its own (that its implementation does not match its interface)
+   is put at the start of its file. *)
+let run_phrases ?(files = []) parse on_output =
   emit := on_output;
   let result = Buffer.create 64 in
   let value = ref None in
@@ -169,9 +196,7 @@ let run code on_output =
   in
   (try
      (try
-        let lexbuf = Lexing.from_string code in
-        Location.init lexbuf "//toplevel//";
-        let phrases = !Toploop.parse_use_file lexbuf in
+        let phrases = parse () in
         let checked = check phrases in
         List.iteri
           (fun i ph ->
@@ -208,12 +233,77 @@ let run code on_output =
           phrases
       with
      | Failed -> ()
+     | Check_failed (i, e) ->
+         let err = error_of_exn e in
+         error :=
+           Some
+             (match (err.loc, List.nth_opt files i) with
+             | None, Some file -> { err with loc = Some (file_start file) }
+             | _ -> err)
      | e -> error := Some (error_of_exn e));
      if !error <> None then value := None
    with Failed -> ());
   flush_output ();
   emit := ignore;
   { result = Buffer.contents result; value = !value; error = !error }
+
+let parse_phrases code file =
+  let lexbuf = Lexing.from_string code in
+  Location.init lexbuf file;
+  !Toploop.parse_use_file lexbuf
+
+(* The entry of a run, and chunks, have no file name: their locations are shown as "Line 1, ...". *)
+let toplevel_file = "//toplevel//"
+
+let run code on_output = run_phrases (fun () -> parse_phrases code toplevel_file) on_output
+
+(* The modules of a program of several files, as [ocamldep] sees them. *)
+let parse_with parser file source =
+  let lexbuf = Lexing.from_string source in
+  Location.init lexbuf file;
+  parser lexbuf
+
+(* [kind] is "ml" or "mli" for a file of the program, and "entry" for the file that is run, which is
+   read as the toplevel reads a file: with directives and phrases that are expressions. *)
+let dependencies ~file ~kind source =
+  try
+    Depend.free_structure_names := Depend.String.Set.empty;
+    (match kind with
+    | "mli" -> Depend.add_signature Depend.String.Map.empty (parse_with Parse.interface file source)
+    | "entry" ->
+        Depend.add_use_file Depend.String.Map.empty (parse_phrases source file)
+    | _ ->
+        Depend.add_implementation Depend.String.Map.empty
+          (parse_with Parse.implementation file source));
+    Ok (Depend.String.Set.elements !Depend.free_structure_names)
+  with e -> Error (error_of_exn e)
+
+(* A file [foo.ml], with its interface [foo.mli] if there is one, is the module [Foo]:
+   [module Foo : sig <foo.mli> end = struct <foo.ml> end]. The parse trees keep the locations of
+   the files, so errors and warnings name them. *)
+type project_module = { name : string; ml_file : string; ml : string; mli : (string * string) option }
+
+let module_phrase m =
+  let str = parse_with Parse.implementation m.ml_file m.ml in
+  let loc = file_start m.ml_file in
+  let body = Ast_helper.Mod.structure ~loc str in
+  let body =
+    match m.mli with
+    | None -> body
+    | Some (file, source) ->
+        let sg = parse_with Parse.interface file source in
+        Ast_helper.Mod.constraint_ ~loc body (Ast_helper.Mty.signature ~loc sg)
+  in
+  Parsetree.Ptop_def
+    [ Ast_helper.Str.module_ ~loc (Ast_helper.Mb.mk ~loc (Location.mknoloc (Some m.name)) body) ]
+
+(* Runs the modules, in the order given (dependencies first), and then the entry, as one chunk:
+   every file is checked before anything runs. *)
+let run_program modules entry on_output =
+  run_phrases
+    ~files:(List.map (fun m -> m.ml_file) modules)
+    (fun () -> List.map module_phrase modules @ parse_phrases entry toplevel_file)
+    on_output
 
 (* A new session: the typing environment and the settings that directives change (#warnings,
    #rectypes, #directory, #print_depth, ...) as they were when the toplevel started. Printers
@@ -271,43 +361,66 @@ let mod_use path =
   emit := ignore;
   Buffer.contents out ^ Buffer.contents errbuf
 
+let js_error e =
+  let line, column, end_line, end_column, file =
+    match e.loc with
+    | Some { loc_start; loc_end; loc_ghost = _ } when loc_start.pos_lnum > 0 ->
+        ( loc_start.pos_lnum,
+          max 0 (loc_start.pos_cnum - loc_start.pos_bol),
+          loc_end.pos_lnum,
+          max 0 (loc_end.pos_cnum - loc_end.pos_bol),
+          if loc_start.pos_fname = toplevel_file then "" else loc_start.pos_fname )
+    | _ -> (0, 0, 0, 0, "")
+  in
+  object%js
+    val message = Js.string e.message
+    val line = line
+    val column = column
+    val endLine = end_line
+    val endColumn = end_column
+    val file = Js.string file
+  end
+
+let js_outcome o =
+  object%js
+    val ok = Js.bool (o.error = None)
+    val result = Js.string o.result
+    val value = match o.value with Some v -> Js.some (Js.string v) | None -> Js.null
+    val error = match o.error with None -> Js.null | Some e -> Js.some (js_error e)
+  end
+
+let strings a = Array.map Js.to_string (Js.to_array a)
+
 let () =
   Js_of_ocaml_toplevel.initialize ();
   ignore (Lazy.force initial_settings);
+  let on_output cb text = ignore (Js.Unsafe.fun_call cb [| Js.Unsafe.inject (Js.string text) |]) in
   Js.Unsafe.global##.ocaml :=
     object%js
-      method run s on_output =
-        let o =
-          run (Js.to_string s) (fun text ->
-              ignore (Js.Unsafe.fun_call on_output [| Js.Unsafe.inject (Js.string text) |]))
+      method run s cb = js_outcome (run (Js.to_string s) (on_output cb))
+      method dependencies file source kind =
+        match dependencies ~file:(Js.to_string file) ~kind:(Js.to_string kind) (Js.to_string source) with
+        | Ok names ->
+            object%js
+              val deps = Js.array (Array.of_list (List.map Js.string names))
+              val error = Js.null
+            end
+        | Error e ->
+            object%js
+              val deps = Js.array [||]
+              val error = Js.some (js_error e)
+            end
+      method runProgram names files mls mli_files mlis entry cb =
+        let names = strings names and files = strings files and mls = strings mls in
+        let mli_files = strings mli_files and mlis = strings mlis in
+        let modules =
+          List.init (Array.length names) (fun i ->
+              { name = names.(i);
+                ml_file = files.(i);
+                ml = mls.(i);
+                mli = (if mli_files.(i) = "" then None else Some (mli_files.(i), mlis.(i))) })
         in
-        object%js
-          val ok = Js.bool (o.error = None)
-          val result = Js.string o.result
-          val value =
-            match o.value with Some v -> Js.some (Js.string v) | None -> Js.null
-          val error =
-            match o.error with
-            | None -> Js.null
-            | Some e ->
-                let line, column, end_line, end_column =
-                  match e.loc with
-                  | Some { loc_start; loc_end; loc_ghost = _ } when loc_start.pos_lnum > 0 ->
-                      ( loc_start.pos_lnum,
-                        loc_start.pos_cnum - loc_start.pos_bol,
-                        loc_end.pos_lnum,
-                        loc_end.pos_cnum - loc_end.pos_bol )
-                  | _ -> (0, 0, 0, 0)
-                in
-                Js.some
-                  (object%js
-                     val message = Js.string e.message
-                     val line = line
-                     val column = column
-                     val endLine = end_line
-                     val endColumn = end_column
-                   end)
-        end
+        js_outcome (run_program modules (Js.to_string entry) (on_output cb))
       method reset = reset ()
       method writeFile p c = Sys_js.create_file ~name:(Js.to_string p) ~content:(Js.to_string c)
       method modUse p = Js.string (mod_use (Js.to_string p))

@@ -2,7 +2,8 @@ import { ConductorError } from "@sourceacademy/conductor/common";
 import { BasicEvaluator, type IRunnerPlugin } from "@sourceacademy/conductor/runner";
 import { OCamlError } from "./errors";
 import { loadToplevel } from "./loader";
-import type { Toplevel } from "./toplevel";
+import { discoverProject } from "./project";
+import type { RunResult, Toplevel } from "./toplevel";
 
 /**
  * The conductor evaluator (ocaml-slang#9). A chunk is a sequence of toplevel phrases, run in one
@@ -33,14 +34,58 @@ export class OCamlEvaluator extends BasicEvaluator {
     return loading;
   }
 
-  /** A run of the editor's program: a new session; shows what the program prints, and the value of its last phrase. */
-  async evaluateFile(_fileName: string, fileContent: string): Promise<void> {
+  /**
+   * A run of the editor's program: a new session; shows what the program prints, and the value of its
+   * last phrase. `fileName` is the file open in the editor: it runs last, after the files of its
+   * directory that it refers to, as modules (see project.ts).
+   */
+  async evaluateFile(fileName: string, fileContent: string): Promise<void> {
     try {
-      (await this.toplevel()).reset();
+      const top = await this.toplevel();
+      top.reset();
+      const project = await discoverProject(
+        top,
+        path => this.requestFile(path),
+        fileName,
+        fileContent,
+      );
+      if ("failure" in project) {
+        const failure = project.failure;
+        this.conductor.sendError(
+          "error" in failure
+            ? new OCamlError(failure.error, fileContent, project.sources)
+            : new ConductorError(failure.message),
+        );
+        return;
+      }
+      if (project.modules.length === 0) return await this.run(fileContent, "file");
+      const { modules } = project;
+      this.show(
+        top.runProgram(
+          modules.map(m => m.name),
+          modules.map(m => m.mlFile),
+          modules.map(m => m.ml),
+          modules.map(m => m.mliFile ?? ""),
+          modules.map(m => m.mli ?? ""),
+          fileContent,
+          this.out,
+        ),
+        "file",
+        fileContent,
+        project.sources,
+      );
     } catch (e) {
-      return this.fail(e);
+      this.fail(e);
     }
-    return this.run(fileContent, "file");
+  }
+
+  /** The file of the program that the conductor has under this path, if it can give it. */
+  private async requestFile(path: string): Promise<string | undefined> {
+    try {
+      return await this.conductor.requestFile(path);
+    } catch {
+      return undefined;
+    }
   }
 
   /** A phrase or more typed in the REPL: shows what the program prints, and the results as the toplevel does. */
@@ -48,28 +93,35 @@ export class OCamlEvaluator extends BasicEvaluator {
     return this.run(chunk, "chunk");
   }
 
+  /** What the program prints goes out as it is flushed. Each message is an entry of the REPL, so the newline that ends it is dropped. */
+  private readonly out = (text: string) => {
+    if (text !== "") this.conductor.sendOutput(text.replace(/\n$/, ""));
+  };
+
   private async run(code: string, mode: "file" | "chunk"): Promise<void> {
     try {
       const top = await this.toplevel();
-      // What the program prints goes out as it is flushed. Each message is an entry of the REPL, so
-      // the newline that ends it is dropped.
-      const out = (text: string) => {
-        if (text !== "") this.conductor.sendOutput(text.replace(/\n$/, ""));
-      };
-      const r = top.run(code, out);
-      if (r.error) {
-        if (mode === "chunk") out(r.result);
-        this.conductor.sendError(new OCamlError(r.error, code));
-      } else {
-        // A value whose printer prints nothing is still the result: send it, though it is empty.
-        if (mode === "file") {
-          if (r.value !== null) this.conductor.sendOutput(r.value.replace(/\n$/, ""));
-        } else {
-          out(r.result);
-        }
-      }
+      this.show(top.run(code, this.out), mode, code, {});
     } catch (e) {
       this.fail(e);
+    }
+  }
+
+  /** Sends the outcome of a run: the error, or the value of a run, or the results of a chunk. */
+  private show(
+    r: RunResult,
+    mode: "file" | "chunk",
+    source: string,
+    others: Record<string, string>,
+  ): void {
+    if (r.error) {
+      if (mode === "chunk") this.out(r.result);
+      this.conductor.sendError(new OCamlError(r.error, source, others));
+    } else if (mode === "file") {
+      // A value whose printer prints nothing is still the result: send it, though it is empty.
+      if (r.value !== null) this.conductor.sendOutput(r.value.replace(/\n$/, ""));
+    } else {
+      this.out(r.result);
     }
   }
 
