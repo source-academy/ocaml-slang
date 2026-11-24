@@ -14,6 +14,8 @@ module.exports = {
       "<rootDir>/node_modules/@sourceacademy/conductor/dist/conductor/util/index.js",
     "^@sourceacademy/conductor/module$":
       "<rootDir>/node_modules/@sourceacademy/conductor/dist/conductor/module/index.js",
+    "^@sourceacademy/conductor/host$":
+      "<rootDir>/node_modules/@sourceacademy/conductor/dist/conductor/host/index.js",
     "^@sourceacademy/conductor/runner$":
       "<rootDir>/node_modules/@sourceacademy/conductor/dist/conductor/runner/index.js",
   },
