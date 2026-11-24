@@ -97,6 +97,10 @@ grader (AWS Lambda, Node, language-agnostic)
 * **Chunks.** A conductor chunk is a sequence of toplevel phrases, so the REPL keeps one toplevel
   session across chunks, as `ocaml` does.
 * **Errors.** OCaml locations are 1-based lines and 0-based columns, which is what Source errors use.
+  The columns (`pos_cnum - pos_bol`) count bytes of the UTF-8 source, whereas the editor counts
+  characters (UTF-16 code units), so the evaluator converts each reported position by decoding
+  the bytes of its line before it. Otherwise errors after a non-ASCII character in a string, comment
+  or identifier are shown shifted. The corpus (#12) gets a test for it.
   Type errors and syntax errors stop the run. Warnings (non-exhaustive match, unused variable) are
   shown and don't stop it.
 * **Loading.** As for Python §4 Typed: the bundle is published next to the evaluator on GitHub Pages,
