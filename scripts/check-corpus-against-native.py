@@ -32,7 +32,7 @@ def compare(label, expected, native_stdout, native_stderr):
     # native OCaml quotes the source under a location (`1 | let ...` and a line of ^^^); the toplevel does not
     stderr = "\n".join(l for l in native_stderr.split("\n") if not re.match(r"^\s*(\d+ \|.*|\^+)\s*$", l))
     # what native OCaml wrote to stderr, as blocks (a warning is several lines) and as single lines
-    native_err = {norm(b) for b in re.split(r"\n\s*\n|\n(?=File )", stderr)} | {norm(l) for l in stderr.split("\n")}
+    native_err = {norm(b) for b in re.split(r"\n\s*\n|\n(?=File )", stderr)} | {norm(l) for l in stderr.split("\n")} | {norm(stderr)}
     # the messages of the evaluator: `out: text`, with the further lines of a message indented
     messages = re.split(r"^out: ", "\n".join(l for l in expected.split("\n") if not l.startswith("--- ")), flags=re.M)[1:]
     messages = [m.replace("\n    ", "\n") for m in messages]
@@ -100,7 +100,10 @@ for expected_path in sorted(glob.glob(f"{root}/projects/*/*.ml.expected")):
                         if f.endswith(".mll"):
                             tool_stderr += subprocess.run(["ocamllex", "-ml", "-q", f"{tmp}/{stem}"], check=True, capture_output=True, text=True).stderr
                         if f.endswith(".mly"):
-                            tool_stderr += subprocess.run(["menhir", "--table", stem], check=True, capture_output=True, text=True, cwd=tmp).stderr
+                            tool_stderr += subprocess.run(["menhir", "--table", "--explain", stem], check=True, capture_output=True, text=True, cwd=tmp).stderr
+                            report = f"{tmp}/{stem[:-4]}.conflicts"  # what --explain wrote, which the evaluator sends too
+                            if os.path.exists(report):
+                                tool_stderr += "\n" + open(report).read()
                         todo.append(stem)
             sources = [os.path.basename(f) for f in glob.glob(f"{tmp}/*.ml") + glob.glob(f"{tmp}/*.mli")]
             order = subprocess.run(["ocamldep", "-sort"] + [f for f in sources if f != entry_name], capture_output=True, text=True, cwd=tmp).stdout.split()

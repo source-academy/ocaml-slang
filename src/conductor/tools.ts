@@ -137,19 +137,24 @@ export class Tools {
       const base = file.replace(/\.mly$/, "");
       const result = runTool(
         await this.script("menhir"),
-        ["menhir", "--table", `/static/${file}`],
+        ["menhir", "--table", "--explain", `/static/${file}`],
         { [file]: source },
-        [`${base}.ml`, `${base}.mli`],
+        [`${base}.ml`, `${base}.mli`, `${base}.conflicts`],
       );
       const ml = result.files[`${base}.ml`];
       const mli = result.files[`${base}.mli`];
       if (result.code !== 0 || ml === null) {
         return { message: tidy(result.stderr + result.stdout) || `menhir failed on ${file}` };
       }
+      // with conflicts, --explain writes a report that shows how each one comes about
+      const report = result.files[`${base}.conflicts`];
+      const notes = [tidy(result.stderr + result.stdout), report ? tidy(report) : ""]
+        .filter(part => part !== "")
+        .join("\n\n");
       return {
         ml: withoutDirectory(ml),
         mli: mli === null || mli === undefined ? undefined : withoutDirectory(mli),
-        notes: tidy(result.stderr + result.stdout),
+        notes,
       };
     });
   }
