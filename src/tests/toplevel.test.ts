@@ -124,6 +124,21 @@ describe("sessions and chunks", () => {
     expect(r.outputs).toContain("- : int = 43");
   });
 
+  test("a new session has the initial settings: warnings, #rectypes", async () => {
+    const { conductor, outputs, errors } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    await ev.evaluateChunk('#warnings "-8";; #rectypes;; #print_depth 1;;');
+    await ev.evaluateChunk("let g2 = function Some x -> x;;");
+    expect(outputs.join("")).not.toContain("Warning 8");
+    outputs.length = 0;
+    await ev.evaluateFile("main.ml", "let g3 = function Some x -> x;;");
+    expect(outputs.join("")).toContain("Warning 8");
+    await ev.evaluateChunk("let rec cyc : 'a list as 'a = [];;");
+    expect(errors.map(e => e.message).join("\n")).toContain(
+      "contains a type variable that cannot be generalized",
+    );
+  });
+
   test("a new session still has MenhirLib and the Stdlib", async () => {
     const { conductor, outputs, errors } = fakeConductor();
     const ev = new OCamlEvaluator(conductor);

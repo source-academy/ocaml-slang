@@ -76,13 +76,54 @@ let run code =
 
 let exec code = snd (run code)
 
-(* A new session: the environment as it was when the toplevel started. *)
-let reset () = Toploop.initialize_toplevel_env ()
+(* A new session: the typing environment and the settings that directives change (#warnings,
+   #rectypes, #directory, #print_depth, ...) as they were when the toplevel started. Printers
+   that #install_printer registered stay, but they are keyed by the paths of the old session's
+   values, which the new environment doesn't have. *)
+type settings = {
+  warnings : Warnings.state;
+  paths : Load_path.paths;
+  recursive_types : bool;
+  principal : bool;
+  strict_sequence : bool;
+  applicative_functors : bool;
+  unsafe : bool;
+  print_depth : int;
+  print_length : int;
+}
+
+let current_settings () =
+  { warnings = Warnings.backup ();
+    paths = Load_path.get_paths ();
+    recursive_types = !Clflags.recursive_types;
+    principal = !Clflags.principal;
+    strict_sequence = !Clflags.strict_sequence;
+    applicative_functors = !Clflags.applicative_functors;
+    unsafe = !Clflags.unsafe;
+    print_depth = !Toploop.max_printer_depth;
+    print_length = !Toploop.max_printer_steps }
+
+let initial_settings = lazy (current_settings ())
+
+let reset () =
+  let i = Lazy.force initial_settings in
+  Warnings.restore i.warnings;
+  Load_path.init ~auto_include:Load_path.no_auto_include ~visible:i.paths.visible
+    ~hidden:i.paths.hidden;
+  Clflags.recursive_types := i.recursive_types;
+  Clflags.principal := i.principal;
+  Clflags.strict_sequence := i.strict_sequence;
+  Clflags.applicative_functors := i.applicative_functors;
+  Clflags.unsafe := i.unsafe;
+  Toploop.max_printer_depth := i.print_depth;
+  Toploop.max_printer_steps := i.print_length;
+  Toploop.initialize_toplevel_env ()
 
 let mod_use path = protect (fun () -> ignore (Toploop.mod_use_input ppf (Toploop.File path)))
 
 let () =
   Js_of_ocaml_toplevel.initialize ();
+  ignore (Lazy.force initial_settings);
   Js.Unsafe.global##.ocaml :=
     object%js
       method exec s = Js.string (exec (Js.to_string s))
