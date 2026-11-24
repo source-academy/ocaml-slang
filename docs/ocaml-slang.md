@@ -47,8 +47,8 @@ checker is never ours to maintain.
 | Question | Decision |
 |---|---|
 | Evaluator | The real OCaml toplevel in a conductor worker. CSE machine and sublanguages come later. |
-| OCaml version | Pinned. The newest OCaml 5.x release that js_of_ocaml, wasm_of_ocaml, Menhir, and the CS4212 toolchain all support, chosen in phase 0. (js_of_ocaml 6.4 supports OCaml 5.5.) Upgrading is a deliberate change with its own issue. |
-| js_of_ocaml or wasm_of_ocaml | Decided in phase 0 by measurement: bundle size, startup, stack depth for deep non-tail recursion, and effects. Since 6.4 the toplevel runs on the Wasm backend too. |
+| OCaml version | **5.5.2**, the newest release; js_of_ocaml 6.5.0 supports OCaml below 5.7, and Menhir 20260209 builds with it. Upgrading is a deliberate change with its own issue. |
+| js_of_ocaml or wasm_of_ocaml | **js_of_ocaml**, by the phase 0 measurements (ocaml-slang#3, #5). wasm_of_ocaml is no smaller (3.7 MB against 3.4 MB brotli), has no deeper recursion in browsers (5,000 frames in Chromium and Firefox), has 31-bit instead of 32-bit `int`, and in WebKit it overflows the stack while loading a generated parser. Memory is similar. Revisit when a new release changes this. |
 | Repository | `source-academy/ocaml-slang`, public: the OCaml build (dune), the TypeScript conductor wrapper, tests, and deployment of the evaluators to GitHub Pages. |
 | Libraries | `Stdlib` and MenhirLib are preloaded. No `Unix` and no `Thread`. Others (`Str`) are added on request. |
 | Menhir back-end | `--table` with the preloaded MenhirLib by default. The code back-end needs Menhir's `--infer-write-query`/`--infer-read-reply` protocol answered by the in-browser type checker (a later phase). |
@@ -103,8 +103,9 @@ grader (AWS Lambda, Node, language-agnostic)
   fetched when the evaluator starts, and started from a `blob:` URL. Fetching overlaps with the
   student typing.
 * **Non-termination and stack overflow.** The frontend stops a runaway evaluator by terminating its
-  worker. Deep non-tail recursion is limited by the JS stack under js_of_ocaml, which is one of the
-  phase 0 measurements.
+  worker. Deep non-tail recursion is limited by the JS stack: the phase 0 spike measured 2,000 (WebKit) to
+  10,000 (Firefox) frames of simple recursion, against millions natively. The grader's Node host can
+  raise its stack (`--stack-size`, 1,000,000 frames worked), the browser cannot.
 
 ## Phases
 
@@ -236,7 +237,9 @@ the design above, alongside phases 0 to 3.
   provide (process spawning, some `Unix` call) on some code path. `--infer` runs `ocamlc`, which is
   why we use `--table` and later the infer protocol. Phase 0 checks this first.
 * **Stack depth.** Deep non-tail recursion may overflow the JS stack sooner than native OCaml. Compiler
-  code recurses over ASTs and long lists. Measure in phase 0, and prefer wasm_of_ocaml if it is better.
+  code recurses over ASTs and long lists. Measured in phase 0: 2,000 to 10,000 frames in browsers under js_of_ocaml, and no better under
+  wasm_of_ocaml. Document it for students, keep tests of the assignments inside it, and grade under Node.
+  Also, `int` is 32 bits under js_of_ocaml (`max_int` is 2147483647), not 63 as natively.
 * **Bundle size and memory.** The toplevel with `compiler-libs`, `Stdlib`, MenhirLib, and Menhir is
   several MB. It is loaded lazily, and only by OCaml users.
 * **Version drift.** The toplevel, js_of_ocaml, and Menhir are pinned together, and an upgrade is a
