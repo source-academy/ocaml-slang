@@ -32,7 +32,9 @@ let protect f =
 (* A chunk is rejected as a whole: its phrases are parsed (a syntax error rejects it) and then
    type checked in sequence, each in the environment that the previous one leaves, before any
    is run. Type checking has no effect on the session, except for warnings, which are silenced
-   here and reported by the run. *)
+   here and reported by the run. A directive (#use, #mod_use, #load) changes the environment in
+   ways that only running it shows, so the check stops at the first one: the phrases after it are
+   checked when they run. *)
 let silent = Format.make_formatter (fun _ _ _ -> ()) (fun () -> ())
 
 let check phrases =
@@ -41,14 +43,13 @@ let check phrases =
   Fun.protect
     ~finally:(fun () -> Location.formatter_for_warnings := saved)
     (fun () ->
-      ignore
-        (List.fold_left
-           (fun env -> function
-             | Parsetree.Ptop_def sstr ->
-                 let _, _, env = Topcommon.typecheck_phrase silent env sstr in
-                 env
-             | Parsetree.Ptop_dir _ -> env)
-           !Toploop.toplevel_env phrases))
+      let rec go env = function
+        | Parsetree.Ptop_def sstr :: rest ->
+            let _, _, env = Topcommon.typecheck_phrase silent env sstr in
+            go env rest
+        | Parsetree.Ptop_dir _ :: _ | [] -> ()
+      in
+      go !Toploop.toplevel_env phrases)
 
 exception Failed
 

@@ -2,7 +2,7 @@ import { ConductorError } from "@sourceacademy/conductor/common";
 import type { IRunnerPlugin } from "@sourceacademy/conductor/runner";
 import { existsSync } from "fs";
 import { resolve } from "path";
-import { OCamlEvaluator } from "../conductor/OCamlEvaluator";
+import { OCamlEvaluator, type Toplevel } from "../conductor/OCamlEvaluator";
 
 // The OCaml toplevel is built by `yarn build:ocaml` (dune), which CI runs before the tests.
 const bundle = resolve(__dirname, "../../dist/ocaml-toplevel.js");
@@ -112,6 +112,16 @@ describe("sessions and chunks", () => {
     await ev.evaluateChunk("fresh;;");
     expect(errors.map(e => e.message).join("\n")).toContain("Unbound value kept");
     expect(outputs.join("")).toContain("- : int = 1");
+  });
+
+  test("phrases after a directive see what it defined", async () => {
+    (globalThis as unknown as { ocaml: Toplevel }).ocaml.writeFile(
+      "/static/defs.ml",
+      "let from_defs = 42;;",
+    );
+    const r = await chunks('#use "/static/defs.ml";; from_defs + 1;;');
+    expect(r.errors).toBe("");
+    expect(r.outputs).toContain("- : int = 43");
   });
 
   test("a new session still has MenhirLib and the Stdlib", async () => {
