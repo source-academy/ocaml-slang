@@ -21,6 +21,13 @@ Use the scripts in `package.json`, not the tools directly.
 * Lint and types: `yarn lint`, `yarn typecheck`. Format: `yarn format` (`yarn format:ci` lists unformatted files).
 * After changing `dune-project`: `dune build @install --auto-promote` regenerates `ocaml-slang.opam`.
 
+## Loading the toplevel
+
+The evaluator fetches `ocaml-toplevel.js` when it starts (`src/conductor/loader.ts`): from
+`TOPLEVEL_URL` on GitHub Pages, or from `globalThis.OCAML_SLANG_TOPLEVEL_URL` (under Node also a file
+path, which the tests use). In a worker it runs the script from a `blob:` URL with `importScripts`;
+under Node as a function given Node's `require`. A failed load is an error of that run, and the next run tries again.
+
 ## OCaml environment
 
 * The OCaml version and every package are pinned: OCaml 5.5.2, js_of_ocaml 6.5.0, Menhir 20260209

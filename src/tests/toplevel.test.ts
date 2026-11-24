@@ -1,11 +1,23 @@
 import { ConductorError } from "@sourceacademy/conductor/common";
 import type { IRunnerPlugin } from "@sourceacademy/conductor/runner";
-import { existsSync } from "fs";
-import { resolve } from "path";
-import { OCamlEvaluator, type Toplevel } from "../conductor/OCamlEvaluator";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { createServer } from "http";
+import type { AddressInfo } from "net";
+import { tmpdir } from "os";
+import { join, resolve } from "path";
+import { OCamlEvaluator } from "../conductor/OCamlEvaluator";
+import type { Toplevel } from "../conductor/toplevel";
 
 // The OCaml toplevel is built by `yarn build:ocaml` (dune), which CI runs before the tests.
 const bundle = resolve(__dirname, "../../dist/ocaml-toplevel.js");
+
+// The evaluator loads the toplevel itself (loader.ts); a file path is read under Node.
+function useBuiltBundle() {
+  if (!existsSync(bundle)) throw new Error(`${bundle} is missing: run 'yarn build:ocaml' first`);
+  g.OCAML_SLANG_TOPLEVEL_URL = bundle;
+}
+
+const g = globalThis as { ocaml?: Toplevel; OCAML_SLANG_TOPLEVEL_URL?: string };
 
 function fakeConductor() {
   const outputs: string[] = [];
@@ -18,11 +30,7 @@ function fakeConductor() {
 }
 
 describe("OCamlEvaluator with the built toplevel", () => {
-  beforeAll(() => {
-    if (!existsSync(bundle)) throw new Error(`${bundle} is missing: run 'yarn build:ocaml' first`);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require(bundle);
-  });
+  beforeAll(useBuiltBundle);
 
   test("runs a phrase and sends what the toplevel printed", async () => {
     const { conductor, outputs, errors } = fakeConductor();
@@ -58,10 +66,7 @@ describe("OCamlEvaluator with the built toplevel", () => {
 });
 
 describe("sessions and chunks", () => {
-  beforeAll(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require(bundle);
-  });
+  beforeAll(useBuiltBundle);
 
   async function chunks(...cs: string[]) {
     const { conductor, outputs, errors } = fakeConductor();
@@ -115,10 +120,7 @@ describe("sessions and chunks", () => {
   });
 
   test("phrases after a directive see what it defined", async () => {
-    (globalThis as unknown as { ocaml: Toplevel }).ocaml.writeFile(
-      "/static/defs.ml",
-      "let from_defs = 42;;",
-    );
+    g.ocaml!.writeFile("/static/defs.ml", "let from_defs = 42;;");
     const r = await chunks('#use "/static/defs.ml";; from_defs + 1;;');
     expect(r.errors).toBe("");
     expect(r.outputs).toContain("- : int = 43");
@@ -147,16 +149,89 @@ describe("sessions and chunks", () => {
   });
 });
 
-describe("OCamlEvaluator without a toplevel", () => {
-  test("sends an error", async () => {
-    const saved = (globalThis as { ocaml?: unknown }).ocaml;
-    delete (globalThis as { ocaml?: unknown }).ocaml;
+describe("loading the toplevel", () => {
+  let saved: Toplevel | undefined;
+  beforeEach(() => {
+    saved = g.ocaml;
+    delete g.ocaml; // so that the evaluator has to load it
+  });
+  afterEach(() => {
+    delete g.OCAML_SLANG_TOPLEVEL_URL;
+    g.ocaml = saved;
+  });
+
+  test("loads the bundle from a URL, when the evaluator starts, before any chunk", async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/javascript" });
+      res.end(readFileSync(bundle));
+    });
+    await new Promise<void>(r => server.listen(0, r));
     try {
-      const { conductor, errors } = fakeConductor();
-      await new OCamlEvaluator(conductor).evaluateChunk("1;;");
-      expect(errors[0].message).toContain("not loaded");
+      g.OCAML_SLANG_TOPLEVEL_URL = `http://localhost:${(server.address() as AddressInfo).port}/ocaml-toplevel.js`;
+      const { conductor, outputs, errors } = fakeConductor();
+      const ev = new OCamlEvaluator(conductor);
+      await waitFor(() => g.ocaml !== undefined); // loading started by the constructor
+      await ev.evaluateChunk("1 + 2;;");
+      expect(errors).toEqual([]);
+      expect(outputs.join("")).toContain("- : int = 3");
     } finally {
-      (globalThis as { ocaml?: unknown }).ocaml = saved;
+      server.close();
     }
   });
+
+  test("a failed load is an error that says why; the next run tries again", async () => {
+    g.OCAML_SLANG_TOPLEVEL_URL = "/no/such/ocaml-toplevel.js";
+    const { conductor, outputs, errors } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    await ev.evaluateChunk("1;;");
+    expect(errors[0].message).toContain("Could not load the OCaml toplevel");
+    expect(errors[0].message).toContain("/no/such/ocaml-toplevel.js");
+    expect(g.ocaml).toBeUndefined();
+    g.OCAML_SLANG_TOPLEVEL_URL = bundle;
+    await ev.evaluateChunk("1 + 1;;");
+    expect(errors).toHaveLength(1);
+    expect(outputs.join("")).toContain("- : int = 2");
+  });
+
+  test("an HTTP error is reported with its status", async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>(r => server.listen(0, r));
+    try {
+      const url = `http://localhost:${(server.address() as AddressInfo).port}/x.js`;
+      g.OCAML_SLANG_TOPLEVEL_URL = url;
+      const { conductor, errors } = fakeConductor();
+      await new OCamlEvaluator(conductor).evaluateChunk("1;;");
+      expect(errors[0].message).toContain("HTTP 404");
+    } finally {
+      server.close();
+    }
+  });
+
+  test("a script that does not define the toplevel is an error", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "ocaml-slang-")), "empty.js");
+    writeFileSync(file, "// nothing");
+    g.OCAML_SLANG_TOPLEVEL_URL = file;
+    const { conductor, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk("1;;");
+    expect(errors[0].message).toContain("did not define");
+  });
+
+  test("an already loaded toplevel is used as it is", async () => {
+    g.ocaml = saved;
+    g.OCAML_SLANG_TOPLEVEL_URL = "/no/such/file.js";
+    const { conductor, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk("1;;");
+    expect(errors).toEqual([]);
+  });
 });
+
+async function waitFor(condition: () => boolean, ms = 10000) {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > ms) throw new Error("timed out");
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
