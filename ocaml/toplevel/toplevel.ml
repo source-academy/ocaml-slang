@@ -165,21 +165,21 @@ let run code on_output =
                 Buffer.add_string result text
               end
             in
-            (* What a directive wrote to the formatter, and what it printed before it failed, is shown. *)
-            if ok then begin
-              add (String.trim (Buffer.contents errbuf));
-              value :=
-                match List.rev printed with
-                | l :: _ when is_expression ph && not unit_expression -> l.value
-                | _ -> None
-            end
-            else begin
-              match List.find_opt (fun l -> l.raised) printed with
-              | Some l ->
+            (* An exception that a #use'd file raised ends the chunk, though the directive itself
+               succeeds. What a directive wrote to the log, and what it printed before it failed, is shown. *)
+            (match List.find_opt (fun l -> l.raised) printed with
+            | Some l ->
+                add (String.trim (Buffer.contents errbuf));
+                fail { message = l.text; loc = None }
+            | None ->
+                if ok then begin
                   add (String.trim (Buffer.contents errbuf));
-                  fail { message = l.text; loc = None }
-              | None -> fail { message = String.trim (Buffer.contents errbuf); loc = None }
-            end)
+                  value :=
+                    match List.rev printed with
+                    | l :: _ when is_expression ph && not unit_expression -> l.value
+                    | _ -> None
+                end
+                else fail { message = String.trim (Buffer.contents errbuf); loc = None }))
           phrases
       with
      | Failed -> ()

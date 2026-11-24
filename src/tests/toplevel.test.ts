@@ -175,6 +175,15 @@ describe("sessions and chunks", () => {
     expect(text).toContain("val a5 : int = 1");
   });
 
+  test("an exception that a #use'd file raises is an error of the chunk", async () => {
+    g.ocaml!.writeFile("/static/defs7.ml", 'let a7 = 1;;\nfailwith "inner";;');
+    const { conductor, outputs, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk('#use "/static/defs7.ml";; let after7 = 1;;');
+    expect(errors[0].message).toBe('Exception: Failure "inner".');
+    expect(outputs.join("\n")).toContain("val a7 : int = 1");
+    expect(outputs.join("\n")).not.toContain("after7");
+  });
+
   test("a directive's own text is shown", async () => {
     const { conductor, outputs, errors } = fakeConductor();
     await new OCamlEvaluator(conductor).evaluateChunk("#help;;");
