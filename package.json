@@ -1,0 +1,44 @@
+{
+  "name": "@sourceacademy/ocaml-slang",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "yarn@4.13.0",
+  "description": "OCaml for Source Academy: a conductor evaluator that runs the real OCaml toplevel",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Source Academy",
+    "url": "https://github.com/source-academy/"
+  },
+  "scripts": {
+    "build:ocaml": "bash scripts/build-ocaml.sh",
+    "build:evaluator": "rollup -c rollup.config.mjs",
+    "build": "yarn build:ocaml && yarn build:evaluator",
+    "test": "jest",
+    "lint": "eslint --concurrency=auto src",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json && tsc --noEmit",
+    "format": "prettier --write \"**/*.{ts,json,js,mjs,cjs,yml}\"",
+    "format:ci": "prettier --list-different \"**/*.{ts,json,js,mjs,cjs,yml}\""
+  },
+  "dependencies": {
+    "@sourceacademy/conductor": "^0.8.3"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.3",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^29.7.0",
+    "prettier": "^3.8.1",
+    "rollup": "^4.59.0",
+    "rollup-plugin-polyfill-node": "^0.13.0",
+    "ts-jest": "^29.0.5",
+    "tslib": "^2.8.1",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.56.1"
+  }
+}

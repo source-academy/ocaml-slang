@@ -1,0 +1,8 @@
+dist
+coverage
+node_modules
+_build
+_opam
+docs
+yarn.lock
+.yarn

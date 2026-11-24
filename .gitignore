@@ -1,0 +1,11 @@
+_opam/
+_build/
+node_modules/
+dist/
+coverage/
+*.bc
+*.log
+.yarn/*
+!.yarn/releases
+!.yarn/patches
+!.yarn/plugins
