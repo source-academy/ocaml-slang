@@ -1,6 +1,9 @@
 (* The OCaml toplevel for js_of_ocaml, with MenhirLib linked in (from the phase 0 spike, ocaml-slang#2).
    Exposes globalThis.ocaml with:
-     exec(code)             run toplevel phrases; returns everything printed (output, values, errors)
+     run(code)              run the phrases of a chunk, all or none: {ok, output}, output being everything
+                            printed (output, values, errors); a syntax or type error rejects the chunk
+     exec(code)             run(code).output
+     reset()                start a new session
      writeFile(path, text)  put a file on the pseudo file system
      modUse(path)           load path.ml as a module (like #mod_use) *)
 open Js_of_ocaml
@@ -26,20 +29,111 @@ let protect f =
    | e -> Location.report_exception ppf e);
   finish ()
 
-let exec code =
-  protect (fun () ->
-      let lexbuf = Lexing.from_string code in
-      Location.init lexbuf "//toplevel//";
-      let phrases = !Toploop.parse_use_file lexbuf in
-      List.iter (fun ph -> ignore (Toploop.execute_phrase true ppf ph)) phrases)
+(* A chunk is rejected as a whole: its phrases are parsed (a syntax error rejects it) and then
+   type checked in sequence, each in the environment that the previous one leaves, before any
+   is run. Type checking has no effect on the session, except for warnings, which are silenced
+   here and reported by the run. A directive (#use, #mod_use, #load) changes the environment in
+   ways that only running it shows, so the check stops at the first one: the phrases after it are
+   checked when they run. *)
+let silent = Format.make_formatter (fun _ _ _ -> ()) (fun () -> ())
+
+let check phrases =
+  let saved = !Location.formatter_for_warnings in
+  Location.formatter_for_warnings := silent;
+  Fun.protect
+    ~finally:(fun () -> Location.formatter_for_warnings := saved)
+    (fun () ->
+      let rec go env = function
+        | Parsetree.Ptop_def sstr :: rest ->
+            let _, _, env = Topcommon.typecheck_phrase silent env sstr in
+            go env rest
+        | Parsetree.Ptop_dir _ :: _ | [] -> ()
+      in
+      go !Toploop.toplevel_env phrases)
+
+exception Failed
+
+(* Runs the phrases of a chunk; stops at the first uncaught exception. [ok] is false for a
+   rejected chunk and for one that raised. *)
+let run code =
+  let ok = ref true in
+  (try
+     let lexbuf = Lexing.from_string code in
+     Location.init lexbuf "//toplevel//";
+     let phrases = !Toploop.parse_use_file lexbuf in
+     check phrases;
+     try List.iter (fun ph -> if not (Toploop.execute_phrase true ppf ph) then raise Failed) phrases
+     with Failed -> ok := false
+   with
+   | Stack_overflow ->
+       ok := false;
+       Format.fprintf ppf "Stack overflow@."
+   | e ->
+       ok := false;
+       Location.report_exception ppf e);
+  let output = finish () in
+  (!ok, output)
+
+let exec code = snd (run code)
+
+(* A new session: the typing environment and the settings that directives change (#warnings,
+   #rectypes, #directory, #print_depth, ...) as they were when the toplevel started. Printers
+   that #install_printer registered stay, but they are keyed by the paths of the old session's
+   values, which the new environment doesn't have. *)
+type settings = {
+  warnings : Warnings.state;
+  paths : Load_path.paths;
+  recursive_types : bool;
+  principal : bool;
+  strict_sequence : bool;
+  applicative_functors : bool;
+  unsafe : bool;
+  print_depth : int;
+  print_length : int;
+}
+
+let current_settings () =
+  { warnings = Warnings.backup ();
+    paths = Load_path.get_paths ();
+    recursive_types = !Clflags.recursive_types;
+    principal = !Clflags.principal;
+    strict_sequence = !Clflags.strict_sequence;
+    applicative_functors = !Clflags.applicative_functors;
+    unsafe = !Clflags.unsafe;
+    print_depth = !Toploop.max_printer_depth;
+    print_length = !Toploop.max_printer_steps }
+
+let initial_settings = lazy (current_settings ())
+
+let reset () =
+  let i = Lazy.force initial_settings in
+  Warnings.restore i.warnings;
+  Load_path.init ~auto_include:Load_path.no_auto_include ~visible:i.paths.visible
+    ~hidden:i.paths.hidden;
+  Clflags.recursive_types := i.recursive_types;
+  Clflags.principal := i.principal;
+  Clflags.strict_sequence := i.strict_sequence;
+  Clflags.applicative_functors := i.applicative_functors;
+  Clflags.unsafe := i.unsafe;
+  Toploop.max_printer_depth := i.print_depth;
+  Toploop.max_printer_steps := i.print_length;
+  Toploop.initialize_toplevel_env ()
 
 let mod_use path = protect (fun () -> ignore (Toploop.mod_use_input ppf (Toploop.File path)))
 
 let () =
   Js_of_ocaml_toplevel.initialize ();
+  ignore (Lazy.force initial_settings);
   Js.Unsafe.global##.ocaml :=
     object%js
       method exec s = Js.string (exec (Js.to_string s))
+      method run s =
+        let ok, output = run (Js.to_string s) in
+        object%js
+          val ok = Js.bool ok
+          val output = Js.string output
+        end
+      method reset = reset ()
       method writeFile p c = Sys_js.create_file ~name:(Js.to_string p) ~content:(Js.to_string c)
       method modUse p = Js.string (mod_use (Js.to_string p))
     end
