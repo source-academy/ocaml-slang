@@ -1,0 +1,12 @@
+--- chunk 1
+out: module M : sig val secret : int type t = A | B end
+--- chunk 2
+out: - : int = 7
+--- chunk 3
+out: module type S = sig val x : int end
+--- chunk 4
+out: module N : S
+--- chunk 5
+out: - : int = 1
+--- chunk 6
+error 1:0-1:8: Error: Unbound value N.hidden

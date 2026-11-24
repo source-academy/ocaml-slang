@@ -1,0 +1,9 @@
+--- chunk 1
+out: val a : int = 1
+--- chunk 2
+error 1:56-1:59: Error: This constant has type string but an expression was expected of type
+             int
+--- chunk 3
+error 1:0-1:1: Error: Unbound value b
+--- chunk 4
+out: - : int = 1

@@ -1,0 +1,5 @@
+out: Line 1, characters 12-32:
+    Warning 8 [partial-match]: this pattern-matching is not exhaustive.
+      Here is an example of a case that is not matched: None
+out: start
+error: Exception: Match_failure ("//toplevel//", 1, 12).

@@ -1,0 +1,15 @@
+#warnings "-8";;
+(* --- *)
+let f = function Some x -> x;;
+(* --- *)
+#warnings "+8";;
+(* --- *)
+let g = function Some x -> x;;
+(* --- *)
+#print_depth 2;;
+(* --- *)
+[[[[1]]]];;
+(* --- *)
+#rectypes;;
+(* --- *)
+let rec cyc : 'a list as 'a = [];;

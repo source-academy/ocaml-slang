@@ -1,0 +1,9 @@
+out: empty
+out: parse error bad at 3
+out: ok 4
+out: not found
+out: int_of_string
+out: negative
+out: div by zero
+out: hd
+out: Error "Empty"

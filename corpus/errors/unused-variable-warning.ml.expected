@@ -1,0 +1,3 @@
+out: Line 1, characters 14-20:
+    Warning 26 [unused-var]: unused variable unused.
+out: 2

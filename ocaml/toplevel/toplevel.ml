@@ -27,7 +27,23 @@ let () =
   Sys_js.set_channel_flusher stderr (fun s -> !emit s);
   Sys_js.set_channel_filler stdin (fun () -> "")
 
+(* Warnings have a formatter of their own, so that each one is a message at the moment the compiler
+   reports it, and without the blank line that the toplevel's printer puts before it. *)
+let warning_buf = Buffer.create 256
+
+let warning_ppf =
+  Format.make_formatter
+    (fun s pos len -> Buffer.add_substring warning_buf s pos len)
+    (fun () ->
+      let s = Buffer.contents warning_buf in
+      Buffer.clear warning_buf;
+      let s = if s <> "" && s.[0] = '\n' then String.sub s 1 (String.length s - 1) else s in
+      if s <> "" then !emit s)
+
+let () = Location.formatter_for_warnings := warning_ppf
+
 let flush_output () =
+  Format.pp_print_flush warning_ppf ();
   Format.pp_print_flush Format.err_formatter ();
   Format.pp_print_flush Format.std_formatter ();
   flush stdout;

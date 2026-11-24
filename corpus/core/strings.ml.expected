@@ -1,0 +1,6 @@
+out: 12 World HELLO, WORLD
+out: a|b||c
+out: e 65 b
+out: xxxpad!
+out: true true 1
+out: "1;2;3;4;5;"

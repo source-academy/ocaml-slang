@@ -8,7 +8,10 @@ OCaml for Source Academy: a conductor evaluator that runs the real OCaml topleve
 * `ocaml/toplevel/`: the OCaml toplevel (compiler-libs, Stdlib, MenhirLib), compiled to one JavaScript
   file with js_of_ocaml (`dune`).
 * `src/conductor/`: the TypeScript conductor evaluator `OCamlEvaluator`.
-* `src/tests/`: Jest tests, which run the built toplevel in Node.
+* `src/tests/`: Jest tests, which run the built toplevel in Node. `src/tests/corpus.test.ts` runs the
+  programs of `corpus/` and compares what the evaluator sends with their `.expected` files (see
+  `corpus/README.md`; `UPDATE_CORPUS=1 yarn test corpus` rewrites them, and
+  `scripts/check-corpus-against-native.py` checks the programs against native OCaml).
 * `dist/`: build output, published to GitHub Pages: `OCamlEvaluator.js` and `ocaml-toplevel.js`.
 * `experiments/`: nothing; spikes are not committed (their results go on the issue).
 

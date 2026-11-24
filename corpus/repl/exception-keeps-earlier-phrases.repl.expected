@@ -1,0 +1,7 @@
+--- chunk 1
+out: val a : int = 1
+error: Exception: Failure "stop".
+--- chunk 2
+out: - : int = 1
+--- chunk 3
+error 1:0-1:1: Error: Unbound value b

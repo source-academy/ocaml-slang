@@ -1,0 +1,2 @@
+error 2:24-2:25: Error: The constant 1 has type int but an expression was expected of type
+             string
