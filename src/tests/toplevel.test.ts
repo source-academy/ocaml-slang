@@ -5,6 +5,7 @@ import { createServer } from "http";
 import type { AddressInfo } from "net";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
+import { editorColumn } from "../conductor/errors";
 import { OCamlEvaluator } from "../conductor/OCamlEvaluator";
 import type { Toplevel } from "../conductor/toplevel";
 
@@ -139,13 +140,228 @@ describe("sessions and chunks", () => {
     expect(errors.map(e => e.message).join("\n")).toContain("occurs inside");
   });
 
+  test("a directive that runs several phrases shows all their results", async () => {
+    g.ocaml!.writeFile("/static/defs3.ml", "let a3 = 1;;\nlet b3 = 2;;\nlet c3 = a3 + b3;;");
+    const { conductor, outputs, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk('#use "/static/defs3.ml";;');
+    expect(errors).toEqual([]);
+    expect(outputs.join("\n")).toContain("val a3 : int = 1");
+    expect(outputs.join("\n")).toContain("val b3 : int = 2");
+    expect(outputs.join("\n")).toContain("val c3 : int = 3");
+  });
+
+  test("a custom printer runs once for the value of a phrase", async () => {
+    const { conductor, outputs } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    await ev.evaluateChunk(
+      'type t = T;; let n = ref 0;; let pp ppf T = incr n; Format.pp_print_string ppf "T#";; #install_printer pp;; T;; !n;;',
+    );
+    expect(outputs.join("\n")).toContain("- : t = T#");
+    expect(outputs.join("\n")).toContain("- : int = 1");
+  });
+
+  test("spaces that a custom printer emits are kept", async () => {
+    const program =
+      'type s = S;; let pp ppf S = Format.pp_print_string ppf " X ";; #install_printer pp;; S;;';
+    const run = fakeConductor();
+    await new OCamlEvaluator(run.conductor).evaluateFile("main.ml", program);
+    expect(run.outputs[run.outputs.length - 1]).toBe(" X ");
+    const chunk = fakeConductor();
+    await new OCamlEvaluator(chunk.conductor).evaluateChunk(program);
+    expect(chunk.outputs[chunk.outputs.length - 1].endsWith("=  X")).toBe(true);
+  });
+
+  test("a value whose printer prints nothing is still the result of a run", async () => {
+    const { conductor, outputs } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateFile(
+      "main.ml",
+      'type e = E;; let pp _ E = ();; #install_printer pp;; print_endline "earlier";; E;;',
+    );
+    expect(outputs).toEqual(["earlier", ""]);
+  });
+
+  test("modUse returns the signature it prints", () => {
+    g.ocaml!.writeFile("/static/m4.ml", "let m4 = 42;;");
+    expect(g.ocaml!.modUse("/static/m4.ml")).toContain("module M4");
+  });
+
+  test("what #use printed before a later phrase of its file failed is shown, with OCaml's text of the error", async () => {
+    g.ocaml!.writeFile("/static/defs5.ml", 'let a5 = 1;;\nlet b5 : int = "s";;');
+    const { conductor, outputs } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    // The directive itself succeeds (as in `ocaml`): the error of the file is part of its text.
+    await ev.evaluateChunk('#use "/static/defs5.ml";;');
+    const text = outputs.join("\n");
+    expect(text).toContain("val a5 : int = 1");
+  });
+
+  test("an exception that a #use'd file raises is an error of the chunk", async () => {
+    g.ocaml!.writeFile("/static/defs7.ml", 'let a7 = 1;;\nfailwith "inner";;');
+    const { conductor, outputs, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk('#use "/static/defs7.ml";; let after7 = 1;;');
+    expect(errors[0].message).toBe('Exception: Failure "inner".');
+    expect(outputs.join("\n")).toContain("val a7 : int = 1");
+    expect(outputs.join("\n")).not.toContain("after7");
+  });
+
+  test("a directive's own text is shown", async () => {
+    const { conductor, outputs, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk("#help;;");
+    expect(errors).toEqual([]);
+    expect(outputs.join("")).toContain("#quit");
+  });
+
+  test("an alias of unit is unit: a run shows no value", async () => {
+    const { conductor, outputs } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateFile("main.ml", "type u = unit;; (() : u);;");
+    expect(outputs).toEqual([]);
+  });
+
+  test("a type error after a directive has a location too", async () => {
+    g.ocaml!.writeFile("/static/defs2.ml", "let from_defs2 = 1;;");
+    const { conductor, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk(
+      '#use "/static/defs2.ml";;\nlet y : int = "s";;',
+    );
+    const e = errors[0] as ConductorError & { line?: number; column?: number };
+    expect(e.line).toBe(2);
+    expect(e.column).toBe(14);
+    expect(e.message).toMatch(/^Error: This constant has type string/);
+  });
+
   test("a new session still has MenhirLib and the Stdlib", async () => {
     const { conductor, outputs, errors } = fakeConductor();
     const ev = new OCamlEvaluator(conductor);
     await ev.evaluateFile("main.ml", "List.length [1;2;3];;");
+    expect(outputs).toEqual(["3"]);
     await ev.evaluateChunk("MenhirLib.Convert.Simplified.traditional2revised;;");
     expect(errors).toEqual([]);
-    expect(outputs.join("")).toContain("- : int = 3");
+    expect(outputs[1]).toContain("MenhirLib.Convert.revised");
+  });
+});
+
+describe("output, results and errors", () => {
+  beforeAll(useBuiltBundle);
+
+  function setup() {
+    const { conductor, outputs, errors } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    const err = () => errors[0] as ConductorError & { line?: number; column?: number };
+    return { ev, outputs, errors, err };
+  }
+
+  test("a run shows what the program prints and the value of the last expression, without its type", async () => {
+    const { ev, outputs, errors } = setup();
+    await ev.evaluateFile(
+      "main.ml",
+      'let rec fact n = if n = 0 then 1 else n * fact (n - 1)\nlet () = print_endline "hello"\nlet () = Printf.printf "%d\\n" 7\n;;\nfact 5;;',
+    );
+    expect(errors).toEqual([]);
+    expect(outputs).toEqual(["hello", "7", "120"]);
+  });
+
+  test("a run shows no value if the last phrase is a definition, or of type unit", async () => {
+    const a = setup();
+    await a.ev.evaluateFile("main.ml", "let x = 1;; let _ = x + 1;;");
+    expect(a.outputs).toEqual([]);
+    const b = setup();
+    await b.ev.evaluateFile("main.ml", 'print_string "done";;');
+    expect(b.outputs).toEqual(["done"]);
+  });
+
+  test("values print as OCaml prints them", async () => {
+    const { ev, outputs } = setup();
+    await ev.evaluateFile("main.ml", "[1; 2];;");
+    await ev.evaluateFile("main.ml", '"abc";;');
+    await ev.evaluateFile("main.ml", "(1, 'c', 2.5);;");
+    expect(outputs).toEqual(["[1; 2]", '"abc"', "(1, 'c', 2.5)"]);
+  });
+
+  test("a chunk shows its output and then the results in the toplevel's style", async () => {
+    const { ev, outputs } = setup();
+    await ev.evaluateChunk('let f x = x + 1;; print_endline "side";; f 5;;');
+    expect(outputs).toEqual(["side", "val f : int -> int = <fun>\n- : unit = ()\n- : int = 6"]);
+  });
+
+  test("output that was not flushed by a newline comes out at the end of the chunk", async () => {
+    const { ev, outputs } = setup();
+    await ev.evaluateFile("main.ml", 'print_string "no newline";;');
+    expect(outputs).toEqual(["no newline"]);
+  });
+
+  test("a type error has OCaml's message and its line and column", async () => {
+    const { ev, outputs, err } = setup();
+    await ev.evaluateChunk('let ok = 1;;\nlet x : int = "five";;');
+    expect(outputs).toEqual([]);
+    expect(err().message).toBe(
+      "Error: This constant has type string but an expression was expected of type\n         int",
+    );
+    expect(err().line).toBe(2);
+    expect(err().column).toBe(14);
+  });
+
+  test("a syntax error has a line and column", async () => {
+    const { ev, err } = setup();
+    await ev.evaluateFile("main.ml", "let a = 1\nlet b = ;;");
+    expect(err().message).toBe("Error: Syntax error");
+    expect(err().line).toBe(2);
+    expect(err().column).toBe(8);
+  });
+
+  test("columns are editor characters, not OCaml's bytes", async () => {
+    const { ev, err } = setup();
+    await ev.evaluateFile("main.ml", 'let s = "héllo" ^ 1;;');
+    expect(err().line).toBe(1);
+    expect(err().column).toBe(18); // 19 in bytes
+    const emoji = setup();
+    await emoji.ev.evaluateFile("main.ml", 'let s = "😀" ^ 1;;'); // 4 bytes, 2 code units
+    expect(emoji.err().column).toBe(15); // 18 in bytes
+  });
+
+  test("an uncaught exception is an error without a location; the output before it is shown", async () => {
+    const { ev, outputs, err } = setup();
+    await ev.evaluateFile("main.ml", 'print_endline "before";; failwith "boom";;');
+    expect(outputs).toEqual(["before"]);
+    expect(err().message).toBe('Exception: Failure "boom".');
+    expect(err().line).toBeUndefined();
+  });
+
+  test("a chunk that stops on an exception still shows the earlier results", async () => {
+    const { ev, outputs, err } = setup();
+    await ev.evaluateChunk('let a = 1;; failwith "no";; let b = 2;;');
+    expect(outputs).toEqual(["val a : int = 1"]);
+    expect(err().message).toContain("Failure");
+  });
+
+  test("a warning is output with its location, and does not stop the run", async () => {
+    const { ev, outputs, errors } = setup();
+    await ev.evaluateFile("main.ml", 'let f = function Some x -> x;;\nprint_string "after";;');
+    expect(errors).toEqual([]);
+    expect(outputs.join("\n")).toMatch(/Warning 8 \[partial-match\]/);
+    expect(outputs[outputs.length - 1]).toBe("after");
+  });
+
+  test("reading from stdin finds the end of the input", async () => {
+    const { ev, err } = setup();
+    await ev.evaluateFile("main.ml", "read_line ();;");
+    expect(err().message).toContain("End_of_file");
+  });
+});
+
+describe("editorColumn", () => {
+  test("is the identity for ASCII", () => {
+    expect(editorColumn("let x = 1", 1, 4)).toBe(4);
+  });
+  test("counts a two-byte character once and a four-byte one twice", () => {
+    expect(editorColumn('"é" x', 1, 4)).toBe(3);
+    expect(editorColumn('"😀" x', 1, 7)).toBe(5);
+  });
+  test("a cut inside a character backs up to its start", () => {
+    expect(editorColumn("é", 1, 1)).toBe(0);
+  });
+  test("later lines, and a line past the end", () => {
+    expect(editorColumn("é\nabc", 2, 2)).toBe(2);
+    expect(editorColumn("abc", 5, 2)).toBe(0);
   });
 });
 

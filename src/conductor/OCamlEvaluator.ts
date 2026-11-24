@@ -1,5 +1,6 @@
 import { ConductorError } from "@sourceacademy/conductor/common";
 import { BasicEvaluator, type IRunnerPlugin } from "@sourceacademy/conductor/runner";
+import { OCamlError } from "./errors";
 import { loadToplevel } from "./loader";
 import type { Toplevel } from "./toplevel";
 
@@ -9,7 +10,9 @@ import type { Toplevel } from "./toplevel";
  * error is rejected as a whole and leaves the session unchanged. Running a file starts a new session.
  *
  * The toplevel bundle is fetched when the evaluator starts (loader.ts), so that loading overlaps with
- * the student typing. What a run and a chunk show, and the errors' lines and columns, are #10.
+ * the student typing. A run shows what the program prints and the value of its last phrase; a chunk
+ * shows what the program prints and the results as the toplevel does (#10). Errors carry OCaml's
+ * message and its line and column.
  */
 export class OCamlEvaluator extends BasicEvaluator {
   private loading?: Promise<Toplevel>;
@@ -30,22 +33,40 @@ export class OCamlEvaluator extends BasicEvaluator {
     return loading;
   }
 
+  /** A run of the editor's program: a new session; shows what the program prints, and the value of its last phrase. */
   async evaluateFile(_fileName: string, fileContent: string): Promise<void> {
     try {
       (await this.toplevel()).reset();
     } catch (e) {
       return this.fail(e);
     }
-    return this.evaluateChunk(fileContent);
+    return this.run(fileContent, "file");
   }
 
-  async evaluateChunk(chunk: string): Promise<void> {
+  /** A phrase or more typed in the REPL: shows what the program prints, and the results as the toplevel does. */
+  evaluateChunk(chunk: string): Promise<void> {
+    return this.run(chunk, "chunk");
+  }
+
+  private async run(code: string, mode: "file" | "chunk"): Promise<void> {
     try {
-      const { ok, output } = (await this.toplevel()).run(chunk);
-      if (ok) {
-        if (output !== "") this.conductor.sendOutput(output);
+      const top = await this.toplevel();
+      // What the program prints goes out as it is flushed. Each message is an entry of the REPL, so
+      // the newline that ends it is dropped.
+      const out = (text: string) => {
+        if (text !== "") this.conductor.sendOutput(text.replace(/\n$/, ""));
+      };
+      const r = top.run(code, out);
+      if (r.error) {
+        if (mode === "chunk") out(r.result);
+        this.conductor.sendError(new OCamlError(r.error, code));
       } else {
-        this.conductor.sendError(new ConductorError(output.trim()));
+        // A value whose printer prints nothing is still the result: send it, though it is empty.
+        if (mode === "file") {
+          if (r.value !== null) this.conductor.sendOutput(r.value.replace(/\n$/, ""));
+        } else {
+          out(r.result);
+        }
       }
     } catch (e) {
       this.fail(e);
