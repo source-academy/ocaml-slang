@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OCaml for Source Academy</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.55 system-ui, sans-serif; max-width: 46rem; margin: 0 auto; padding: 1rem 1.2rem 4rem; }
+  h1 { font-size: 1.7rem; } h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #8884; padding-bottom: .2rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+  code, pre { font: 0.92em ui-monospace, Menlo, Consolas, monospace; }
+  pre { background: #8881; border: 1px solid #8883; border-radius: 4px; padding: .6rem .8rem; overflow-x: auto; }
+  code { background: #8881; padding: 0 .2em; border-radius: 3px; } pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; } td, th { border: 1px solid #8884; padding: .25rem .6rem; text-align: left; vertical-align: top; }
+  nav ul { columns: 2; } a { color: #2a6fdb; } @media (prefers-color-scheme: dark) { a { color: #7fb0ff; } }
+</style>
+</head>
+<body>
+<h1>OCaml for Source Academy</h1>
+<p>Source Academy runs the real <a href="https://ocaml.org/">OCaml</a> toplevel (OCaml <strong>5.5.2</strong>)
+in your browser: the compiler's own type checker and error messages, compiled to JavaScript with
+<a href="https://ocsigen.org/js_of_ocaml/">js_of_ocaml</a>. It comes with
+<a href="https://gitlab.inria.fr/fpottier/menhir">Menhir</a> and <code>ocamllex</code>, so that a lexer and a parser
+can be part of your program. The source is at
+<a href="https://github.com/source-academy/ocaml-slang">source-academy/ocaml-slang</a>.</p>
+
+<nav><ul>
+  <li><a href="#run">Running a program and the REPL</a></li>
+  <li><a href="#available">What is available</a></li>
+  <li><a href="#not">What is not available</a></li>
+  <li><a href="#files">Programs of several files</a></li>
+  <li><a href="#parsers">Lexers and parsers: ocamllex and Menhir</a></li>
+  <li><a href="#grading">Assessments and autograding</a></li>
+  <li><a href="#limits">Limits</a></li>
+</ul></nav>
+
+<h2 id="run">Running a program and the REPL</h2>
+<p><strong>Run</strong> runs the file that is open in the editor, in a fresh session. It shows what the program
+prints, and the value of the last expression (without its type):</p>
+<pre><code>let rec fact n = if n = 0 then 1 else n * fact (n - 1)
+
+;; fact 5          (* shows: 120 *)</code></pre>
+<p>Without the <code>;;</code>, <code>fact 5</code> would be read as part of the definition above it. A top-level
+expression after a definition needs <code>;;</code> (or <code>let () = ...</code>), exactly as in an OCaml file.</p>
+<p>The <strong>REPL</strong> works as the <code>ocaml</code> toplevel does: type phrases ending in <code>;;</code> and see
+<code>val x : int = 3</code>, <code>- : int = 120</code> and so on, with their types. It keeps what the last
+run and earlier phrases defined. A run starts a new session. The phrases of one REPL entry are
+checked before any runs, so a syntax or type error means that none of them runs. The check stops at a directive
+(<code>#warnings</code>, <code>#use</code>, ...): the phrases before it run, and an error after it is found only then.</p>
+<p>Errors come with OCaml's own message and a position in the editor. Warnings (unused variable, non-exhaustive
+match, ...) are shown as OCaml prints them. The toplevel directives <code>#warnings</code>,
+<code>#rectypes</code>, <code>#show</code> and <code>#print_depth</code> work; <code>#require</code> and
+<code>#load</code> do not (see below). <code>#use</code> reads only files in the program's own in-memory file system
+(for example one that the program wrote), <em>not</em> the files of the playground: to use another file of yours,
+make it a module (see <a href="#files">programs of several files</a>).</p>
+
+<h2 id="available">What is available</h2>
+<ul>
+  <li>The whole OCaml language of OCaml 5.5: modules and functors, objects, GADTs, polymorphic variants, labels, ...</li>
+  <li>The <strong>Stdlib</strong>: <code>List</code>, <code>Array</code>, <code>String</code>, <code>Hashtbl</code>, <code>Map</code>,
+    <code>Set</code>, <code>Printf</code>, <code>Format</code>, <code>Buffer</code>, <code>Scanf</code>, <code>Lexing</code>,
+    <code>Parsing</code>, <code>Bigarray</code>, ... (<code>Random</code> and <code>Sys</code> too, with what a browser can do).</li>
+  <li><strong>MenhirLib</strong>, which the parsers that Menhir generates use.</li>
+  <li><strong>Menhir</strong> (version 20260209) and <strong>ocamllex</strong>: see <a href="#parsers">below</a>.</li>
+</ul>
+
+<h2 id="not">What is not available</h2>
+<ul>
+  <li>Libraries outside the Stdlib and MenhirLib: <code>Unix</code>, <code>Str</code>, <code>Thread</code> (and so
+    <code>#require</code> of any library), <code>Dynlink</code>. The Source Academy modules of other languages are not available either.</li>
+  <li><strong>Input</strong>: <code>read_line</code> and reading from <code>stdin</code> raise <code>End_of_file</code>.
+    A program cannot ask the user for input (yet).</li>
+  <li><strong>Effect handlers</strong> raise <code>Failure "Effect handlers are not supported"</code>. Domains and
+    <code>Mutex</code> exist, but nothing runs in parallel.</li>
+  <li>Files: there is an in-memory file system for the program, not your computer's.</li>
+</ul>
+
+<h2 id="files">Programs of several files</h2>
+<p>Use the folder mode of the playground to have several files. <strong>The file that is open in the editor is the
+program: it is the one that runs.</strong> The other files are modules of it:</p>
+<ul>
+  <li><code>foo.ml</code> (with an optional interface <code>foo.mli</code>) in the folder of the open file is the module
+    <code>Foo</code>. A file name with a capital letter works too (<code>Foo.ml</code>).</li>
+  <li>Only the files that the program refers to are used (directly or through other modules), and they are compiled in
+    dependency order, as <code>module Foo : sig ... end = struct ... end</code>. Other files are ignored,
+    even if they have errors.</li>
+  <li>Modules cannot refer to each other in a cycle, and they cannot refer to the open file (<code>Unbound module Main</code>).</li>
+  <li>All files are checked before anything runs. An error in another file says which file it is in, with the line
+    in the message; an error in the open file is also marked in the editor.</li>
+  <li>Files in subfolders are not found.</li>
+</ul>
+<p>A module may be given as <code>foo.ml</code>, <code>foo.mll</code> or <code>foo.mly</code>, but not as more than one of them.</p>
+
+<h2 id="parsers">Lexers and parsers: ocamllex and Menhir</h2>
+<p>A file <code>lexer.mll</code> is an <a href="https://ocaml.org/manual/5.5/lexyacc.html">ocamllex</a> lexer and becomes
+the module <code>Lexer</code>; a file <code>parser.mly</code> is a <a href="https://gallium.inria.fr/~fpottier/menhir/manual.html">Menhir</a>
+grammar and becomes the module <code>Parser</code>, with the types of its tokens. They are generated (and cached) when
+the program is run, with <code>ocamllex -ml</code> and <code>menhir --table --explain</code>:</p>
+<pre><code>(* lexer.mll *)
+{ open Parser }
+rule token = parse
+  | [' ' '\n'] { token lexbuf }
+  | ['0'-'9']+ as n { NUM (int_of_string n) }
+  | '+' { PLUS } | eof { EOF }
+
+(* parser.mly *)
+%token &lt;int&gt; NUM
+%token PLUS EOF
+%left PLUS
+%start &lt;int&gt; main
+%%
+main: e = expr EOF { e }
+expr: n = NUM { n } | a = expr PLUS b = expr { a + b }
+
+(* main.ml, the open file *)
+let () = print_int (Parser.main Lexer.token (Lexing.from_string "1 + 2 + 3"))</code></pre>
+<ul>
+  <li><strong>Conflicts</strong>: Menhir's warnings about shift/reduce and reduce/reduce conflicts are shown, followed by its
+    <code>--explain</code> report, which derives each conflict, so that you can see why the grammar is ambiguous
+    (for example the dangling <code>else</code>). Precedence declarations (<code>%left</code>, <code>%nonassoc</code>,
+    <code>%prec</code>) resolve them.</li>
+  <li><strong>Errors</strong>: a syntax error in a <code>.mll</code> or <code>.mly</code> is shown with the tool's message and position.
+    A type error in a semantic action points at the place in your <code>.mly</code> or <code>.mll</code>, not into the generated file.</li>
+  <li>The generated <code>.ml</code> and <code>.mli</code> files are not shown, and Menhir's options are fixed (the table back-end, because
+    the code back-end needs more than the toplevel can offer).</li>
+</ul>
+
+<h2 id="grading">Assessments and autograding</h2>
+<ul>
+  <li>An OCaml question has one file: the student's program, with the question's prepend and postpend.</li>
+  <li>A testcase is joined to the program, run, and <strong>the last line it printed is compared with the expected answer</strong>.
+    For an expression, that is its value as the toplevel prints it, without the type: <code>fact 5</code> gives <code>120</code>.
+    <strong>Start a testcase with <code>;;</code></strong> (<code>;; fact 5</code>), or it is read as part of the last definition.</li>
+  <li>A testcase that has an error, or an uncaught exception, fails. A program that runs too long is stopped.</li>
+  <li>Questions with several files are not supported yet.</li>
+</ul>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li><strong><code>int</code> has 32 bits</strong> (<code>max_int = 2147483647</code>), because the toplevel runs as JavaScript.
+    <code>Int64</code> is exact. Programs that rely on 63-bit integers (hash functions, large factorials) differ from native OCaml.</li>
+  <li><strong>Deep recursion</strong>: a non-tail-recursive function can go only a few thousand calls deep (browsers differ), then
+    <code>Stack overflow</code> is raised. Use tail recursion, or <code>List.rev</code>-based loops, for long lists.</li>
+  <li>The first run of a page takes a moment to load the toplevel (about 8 MB, 3.4 MB compressed); the first
+    <code>.mly</code> or <code>.mll</code> loads Menhir (1 MB) or ocamllex (0.2 MB).</li>
+  <li>Behaviour that depends on the machine (<code>Sys.word_size</code> is 32, <code>Sys.backend_type</code> is
+    <code>Other "js_of_ocaml"</code>, time, environment) differs from native OCaml.</li>
+</ul>
+</body>
+</html>

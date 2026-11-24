@@ -14,6 +14,9 @@ OCaml for Source Academy: a conductor evaluator that runs the real OCaml topleve
   programs of `corpus/` and compares what the evaluator sends with their `.expected` files (see
   `corpus/README.md`; `UPDATE_CORPUS=1 yarn test corpus` rewrites them, and
   `scripts/check-corpus-against-native.py` checks the programs against native OCaml).
+* `site/`: the documentation page, one HTML file, published to https://docs.sourceacademy.org/ocaml/
+  by `.github/workflows/deploy-docs.yml` (the language directory's `documentation.languageUrl`).
+  Keep it true: what it says about limits and testcases is tested in `src/tests` and `corpus/`.
 * `dist/`: build output, published to GitHub Pages: `OCamlEvaluator.js` and `ocaml-toplevel.js`.
 * `experiments/`: nothing; spikes are not committed (their results go on the issue).
 

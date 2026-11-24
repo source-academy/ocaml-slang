@@ -1,0 +1,30 @@
+name: Deploy the documentation
+
+# The documentation page (site/) is published to https://docs.sourceacademy.org/ocaml/, beside the
+# Source and Python documentation, as py-slang does for /python. It needs the secret
+# DOCS_DEPLOY_SSH_KEY: the private half of a deploy key (with write access) of
+# source-academy/docs.sourceacademy.org.
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/deploy-docs.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Deploy to the docs site (/ocaml)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.DOCS_DEPLOY_SSH_KEY }}
+          publish_dir: site
+          external_repository: source-academy/docs.sourceacademy.org
+          publish_branch: master
+          destination_dir: ocaml
+          # keep what the other languages published
+          keep_files: true

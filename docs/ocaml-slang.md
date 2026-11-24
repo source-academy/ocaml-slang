@@ -255,9 +255,13 @@ Not OCaml-specific: Python with folder imports can use the same questions.
   for indentation, so the frontend imports `mode-ocaml` as it does `mode-python`. No completions
   until Merlin (#30). The directory entry has no `editorConfig`. The plugin is registered only
   where there is an editor (a browser worker), not under the grader's Node host.
-* Documentation: what is supported (the version, `Stdlib`, MenhirLib, ocamllex, Menhir and its
-  options), what is not (`Unix`, threads, Source Academy modules), and how multi-file programs and
-  generated parsers work.
+* Documentation (#24): one static page, `site/index.html`, published by a workflow to
+  `https://docs.sourceacademy.org/ocaml/` (the docs repository, as py-slang does for `/python`; needs a
+  deploy key of that repository as the secret `DOCS_DEPLOY_SSH_KEY`) and linked from the directory entry
+  (`documentation.languageUrl`): what is supported (the version, `Stdlib`, MenhirLib, ocamllex,
+  Menhir), what is not (`Unix`, `Str`, threads, effects, input), multi-file programs, generated
+  parsers and the conflict report, how assessments are graded, and the limits (32-bit `int`, recursion
+  depth).
 * Release, in order: ocaml-slang deployed, then language-directory (merge, bump, tag), then the
   frontend's bump of the directory, then the grader and backend.
 
