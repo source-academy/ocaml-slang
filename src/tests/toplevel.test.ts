@@ -49,10 +49,78 @@ describe("OCamlEvaluator with the built toplevel", () => {
     expect(outputs.join("")).toContain("MenhirLib.Convert.revised");
   });
 
-  test("reports type errors with their position", async () => {
-    const { conductor, outputs } = fakeConductor();
+  test("sends a type error as an error, not as output", async () => {
+    const { conductor, outputs, errors } = fakeConductor();
     await new OCamlEvaluator(conductor).evaluateChunk('let x : int = "five";;');
-    expect(outputs.join("")).toContain("Error: This constant has type string");
+    expect(outputs).toEqual([]);
+    expect(errors[0].message).toContain("Error: This constant has type string");
+  });
+});
+
+describe("sessions and chunks", () => {
+  beforeAll(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require(bundle);
+  });
+
+  async function chunks(...cs: string[]) {
+    const { conductor, outputs, errors } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    for (const c of cs) await ev.evaluateChunk(c);
+    return { ev, outputs: outputs.join(""), errors: errors.map(e => e.message).join("\n") };
+  }
+
+  test("a syntax error rejects the whole chunk", async () => {
+    const r = await chunks("let a1 = 1;; let b1 = ;;", "a1;;");
+    expect(r.errors).toContain("Syntax error");
+    expect(r.errors).toContain("Unbound value a1");
+  });
+
+  test("a type error in a later phrase rejects the whole chunk and runs nothing", async () => {
+    const r = await chunks('print_string "ran";; let c1 = 1;; let d1 : int = "x";;', "c1;;");
+    expect(r.outputs).not.toContain("ran");
+    expect(r.errors).toContain("This constant has type string");
+    expect(r.errors).toContain("Unbound value c1");
+  });
+
+  test("phrases of a chunk see each other's types", async () => {
+    const r = await chunks("type t = A | B;; let f = function A -> 1 | B -> 2;; f B;;");
+    expect(r.errors).toBe("");
+    expect(r.outputs).toContain("- : int = 2");
+  });
+
+  test("an exception stops the chunk; earlier phrases stay", async () => {
+    const r = await chunks('let e1 = 1;; failwith "boom";; let f1 = 2;;', "e1;;", "f1;;");
+    expect(r.errors).toContain("Failure");
+    expect(r.errors).toContain("Unbound value f1");
+    expect(r.outputs).toContain("- : int = 1");
+  });
+
+  test("a warning is shown once and does not reject the chunk", async () => {
+    const r = await chunks("let g1 = function Some x -> x;;");
+    expect(r.errors).toBe("");
+    expect(r.outputs.match(/Warning 8/g)).toHaveLength(1);
+    expect(r.outputs).toContain("val g1");
+  });
+
+  test("evaluating a file starts a new session", async () => {
+    const { conductor, outputs, errors } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    await ev.evaluateChunk("let kept = 7;;");
+    await ev.evaluateFile("main.ml", "let fresh = 1;;");
+    await ev.evaluateChunk("kept;;");
+    await ev.evaluateChunk("fresh;;");
+    expect(errors.map(e => e.message).join("\n")).toContain("Unbound value kept");
+    expect(outputs.join("")).toContain("- : int = 1");
+  });
+
+  test("a new session still has MenhirLib and the Stdlib", async () => {
+    const { conductor, outputs, errors } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    await ev.evaluateFile("main.ml", "List.length [1;2;3];;");
+    await ev.evaluateChunk("MenhirLib.Convert.Simplified.traditional2revised;;");
+    expect(errors).toEqual([]);
+    expect(outputs.join("")).toContain("- : int = 3");
   });
 });
 
