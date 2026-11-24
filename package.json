@@ -21,7 +21,9 @@
     "build:tools": "bash scripts/build-tools.sh"
   },
   "dependencies": {
-    "@sourceacademy/conductor": "^0.8.3"
+    "@sourceacademy/common-autocomplete": "^0.0.1",
+    "@sourceacademy/conductor": "^0.8.3",
+    "@sourceacademy/runner-autocomplete": "^0.0.2"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.3",
@@ -31,6 +33,7 @@
     "@rollup/plugin-typescript": "^12.1.2",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.0.0",
+    "ace-builds": "^1.45.2",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "jest": "^29.7.0",

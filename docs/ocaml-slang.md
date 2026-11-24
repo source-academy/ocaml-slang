@@ -248,8 +248,13 @@ Not OCaml-specific: Python with folder imports can use the same questions.
 
 ### Phase 5: language directory, documentation, release (about 3 days)
 
-* language-directory: `src/languages/ocaml/` with the language "OCaml" and its evaluator, and
-  OCaml syntax highlighting (Ace has an OCaml mode) through `editorConfig` or the frontend.
+* language-directory: `src/languages/ocaml/` with the language "OCaml" and its evaluator.
+* Syntax highlighting (#44), as py-slang does it: the evaluator registers a conductor autocomplete
+  plugin (`src/conductor/autocomplete/`) that sends the frontend Ace highlight rules for OCaml
+  (nested comments, quoted strings, characters versus type variables, ...), with Ace's own OCaml mode
+  for indentation, so the frontend imports `mode-ocaml` as it does `mode-python`. No completions
+  until Merlin (#30). The directory entry has no `editorConfig`. The plugin is registered only
+  where there is an editor (a browser worker), not under the grader's Node host.
 * Documentation: what is supported (the version, `Stdlib`, MenhirLib, ocamllex, Menhir and its
   options), what is not (`Unix`, threads, Source Academy modules), and how multi-file programs and
   generated parsers work.
