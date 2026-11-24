@@ -138,8 +138,12 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
   GitHub Pages.
 * The conductor evaluator: chunks run as toplevel phrases in one session; output from
   `print_string`, `Printf`, and friends goes to the REPL; errors and warnings carry line and column;
-  results print as decided above (output only for a run, toplevel style in the REPL); `read_line` maps to conductor input if the conductor supports
-  it.
+  results print as decided above (output only for a run, toplevel style in the REPL). Each result
+  and each flush of the program's output is a conductor output message, as in Python's evaluators, so
+  a testcase that prints or evaluates its answer is read from the last output. Errors carry OCaml's
+  message and its line and column (the column in editor characters, converted from OCaml's bytes).
+  `read_line` finds the end of the input: the conductor's input is asynchronous, which a toplevel
+  that runs synchronously cannot wait for (see "Later").
 * Lazy loading from a `blob:` URL, and a Node host for the tests.
 * Tests: a corpus of OCaml programs with expected output and errors, run in Node in CI.
 
@@ -211,6 +215,10 @@ Not OCaml-specific: Python with folder imports can use the same questions.
 
 ### Later (not in v1)
 
+* **Input from the user** (`read_line`, `input_line stdin`): the toplevel runs synchronously and the
+  conductor's input request is asynchronous. Options: js_of_ocaml's effect support (`--effects=cps`) to
+  suspend the program while the request is open (larger and slower code), or a blocking wait on a
+  `SharedArrayBuffer` in a second worker.
 * **Menhir's code back-end**: answer `--infer-write-query`/`--infer-read-reply` with the in-browser
   type checker. Semantic actions are then type-checked against the student's AST types, with better
   errors.
