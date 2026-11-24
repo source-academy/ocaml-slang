@@ -38,7 +38,8 @@ let flush_output () =
    [Toploop.execute_phrase] prints itself, those of directives, go to [ppf]. *)
 type phrase = { text : string; value : string option; unit_typed : bool; raised : bool }
 
-let last : phrase option ref = ref None
+(* The phrases printed since the last reset, latest first: a directive such as #use runs several. *)
+let captured : phrase list ref = ref []
 let errbuf = Buffer.create 256
 let ppf = Format.formatter_of_buffer errbuf
 
@@ -55,7 +56,7 @@ let () =
         | _ -> (None, false)
       in
       let raised = match phr with Outcometree.Ophr_exception _ -> true | _ -> false in
-      last := Some { text; value; unit_typed; raised }
+      captured := { text; value; unit_typed; raised } :: !captured
 
 type error = { message : string; loc : Location.t option }
 
@@ -130,19 +131,27 @@ let run code on_output =
           (fun i ph ->
             (* After a directive, a phrase is checked just before it runs, for the same errors. *)
             if i >= checked then ignore (without_warnings (fun () -> typecheck !Toploop.toplevel_env ph));
-            last := None;
+            captured := [];
             Buffer.clear errbuf;
             let ok = Toploop.execute_phrase true ppf ph in
             Format.pp_print_flush ppf ();
             flush_output ();
-            match (ok, !last) with
-            | true, Some l ->
-                if Buffer.length result > 0 then Buffer.add_char result '\n';
-                Buffer.add_string result l.text;
-                value := if is_expression ph && not l.unit_typed then l.value else None
-            | true, None -> value := None
-            | false, Some l when l.raised -> fail { message = l.text; loc = None }
-            | false, _ -> fail { message = String.trim (Buffer.contents errbuf); loc = None })
+            let printed = List.rev !captured in
+            if ok then begin
+              List.iter
+                (fun l ->
+                  if Buffer.length result > 0 then Buffer.add_char result '\n';
+                  Buffer.add_string result l.text)
+                printed;
+              value :=
+                match List.rev printed with
+                | l :: _ when is_expression ph && not l.unit_typed -> l.value
+                | _ -> None
+            end
+            else
+              match List.find_opt (fun l -> l.raised) printed with
+              | Some l -> fail { message = l.text; loc = None }
+              | None -> fail { message = String.trim (Buffer.contents errbuf); loc = None })
           phrases
       with
      | Failed -> ()

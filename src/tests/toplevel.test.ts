@@ -140,6 +140,16 @@ describe("sessions and chunks", () => {
     expect(errors.map(e => e.message).join("\n")).toContain("occurs inside");
   });
 
+  test("a directive that runs several phrases shows all their results", async () => {
+    g.ocaml!.writeFile("/static/defs3.ml", "let a3 = 1;;\nlet b3 = 2;;\nlet c3 = a3 + b3;;");
+    const { conductor, outputs, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk('#use "/static/defs3.ml";;');
+    expect(errors).toEqual([]);
+    expect(outputs.join("\n")).toContain("val a3 : int = 1");
+    expect(outputs.join("\n")).toContain("val b3 : int = 2");
+    expect(outputs.join("\n")).toContain("val c3 : int = 3");
+  });
+
   test("a type error after a directive has a location too", async () => {
     g.ocaml!.writeFile("/static/defs2.ml", "let from_defs2 = 1;;");
     const { conductor, errors } = fakeConductor();
