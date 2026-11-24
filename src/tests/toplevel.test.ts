@@ -150,6 +150,21 @@ describe("sessions and chunks", () => {
     expect(outputs.join("\n")).toContain("val c3 : int = 3");
   });
 
+  test("a custom printer runs once for the value of a phrase", async () => {
+    const { conductor, outputs } = fakeConductor();
+    const ev = new OCamlEvaluator(conductor);
+    await ev.evaluateChunk(
+      'type t = T;; let n = ref 0;; let pp ppf T = incr n; Format.pp_print_string ppf "T#";; #install_printer pp;; T;; !n;;',
+    );
+    expect(outputs.join("\n")).toContain("- : t = T#");
+    expect(outputs.join("\n")).toContain("- : int = 1");
+  });
+
+  test("modUse returns the signature it prints", () => {
+    g.ocaml!.writeFile("/static/m4.ml", "let m4 = 42;;");
+    expect(g.ocaml!.modUse("/static/m4.ml")).toContain("module M4");
+  });
+
   test("a type error after a directive has a location too", async () => {
     g.ocaml!.writeFile("/static/defs2.ml", "let from_defs2 = 1;;");
     const { conductor, errors } = fakeConductor();

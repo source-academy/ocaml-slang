@@ -47,14 +47,18 @@ let () =
   let original = !Toploop.print_out_phrase in
   Toploop.print_out_phrase :=
     fun _ phr ->
-      let text = String.trim (Format.asprintf "%a" original phr) in
-      let value, unit_typed =
+      (* The value is printed once (a printer from #install_printer may have effects, and a
+         printer for a type is run for each value it prints) and then shown as it is. *)
+      let phr, value, unit_typed =
         match phr with
         | Outcometree.Ophr_eval (v, ty) ->
-            ( Some (String.trim (Format.asprintf "%a" !Toploop.print_out_value v)),
+            let printed = String.trim (Format.asprintf "%a" !Toploop.print_out_value v) in
+            ( Outcometree.Ophr_eval (Oval_stuff printed, ty),
+              Some printed,
               ty = Outcometree.Otyp_constr (Oide_ident { printed_name = "unit" }, []) )
-        | _ -> (None, false)
+        | _ -> (phr, None, false)
       in
+      let text = String.trim (Format.asprintf "%a" original phr) in
       let raised = match phr with Outcometree.Ophr_exception _ -> true | _ -> false in
       captured := { text; value; unit_typed; raised } :: !captured
 
@@ -210,12 +214,14 @@ let mod_use path =
   let out = Buffer.create 256 in
   emit := Buffer.add_string out;
   Buffer.clear errbuf;
+  captured := [];
   (try ignore (Toploop.mod_use_input ppf (Toploop.File path))
    with e -> Buffer.add_string out (error_of_exn e).message);
   Format.pp_print_flush ppf ();
   flush_output ();
   emit := ignore;
-  Buffer.contents out ^ Buffer.contents errbuf
+  let results = String.concat "\n" (List.rev_map (fun l -> l.text) !captured) in
+  String.concat "" [ Buffer.contents out; Buffer.contents errbuf; results ]
 
 let () =
   Js_of_ocaml_toplevel.initialize ();
