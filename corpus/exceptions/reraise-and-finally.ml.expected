@@ -1,0 +1,3 @@
+out: work,cleanup 42
+out: work,cleanup Failure("inner")
+out: ab

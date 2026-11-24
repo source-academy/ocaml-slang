@@ -1,0 +1,3 @@
+error 1:24-1:34: Error: This constant has type string but an expression was expected of type
+             unit
+           because it is in the result of a conditional with no else branch

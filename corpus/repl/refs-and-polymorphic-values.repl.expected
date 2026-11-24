@@ -1,0 +1,14 @@
+--- chunk 1
+out: val r : int list ref = {contents = []}
+--- chunk 2
+out: - : unit = ()
+--- chunk 3
+out: - : int list = [1]
+--- chunk 4
+out: val l : int ref = {contents = 0}
+--- chunk 5
+out: - : int = 2
+--- chunk 6
+out: - : 'a -> 'a = <fun>
+--- chunk 7
+out: - : ('a -> 'b) -> 'a list -> 'b list = <fun>

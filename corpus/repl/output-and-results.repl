@@ -1,0 +1,7 @@
+print_endline "side effect";;
+(* --- *)
+let () = print_string "partial";;
+(* --- *)
+print_endline "a"; print_endline "b"; 42;;
+(* --- *)
+let g () = print_endline "called"; 1 in g ();;

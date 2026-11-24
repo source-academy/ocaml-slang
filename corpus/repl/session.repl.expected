@@ -1,0 +1,25 @@
+--- chunk 1
+out: val x : int = 5
+--- chunk 2
+out: - : int = 10
+--- chunk 3
+out: val f : int -> int = <fun>
+--- chunk 4
+out: - : int = 15
+--- chunk 5
+out: val x : int = 100
+--- chunk 6
+out: - : int = 15
+--- chunk 7
+out: type colour = Red | Green | Blue
+--- chunk 8
+out: - : colour list = [Red; Blue]
+--- chunk 9
+out: val fact : int -> int = <fun>
+--- chunk 10
+out: - : int = 720
+--- chunk 11
+out: - : string = "a string"
+--- chunk 12
+out: - : int * float * char * string * int array * 'a option option =
+    (1, 2.5, 'c', "s", [|1; 2|], Some None)

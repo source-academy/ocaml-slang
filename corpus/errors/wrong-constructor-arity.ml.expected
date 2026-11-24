@@ -1,0 +1,2 @@
+error 2:8-2:11: Error: The constructor A expects 2 argument(s),
+           but is applied here to 1 argument(s)

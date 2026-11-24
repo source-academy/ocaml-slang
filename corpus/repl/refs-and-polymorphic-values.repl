@@ -1,0 +1,13 @@
+let r : int list ref = ref [];;
+(* --- *)
+r := [1];;
+(* --- *)
+!r;;
+(* --- *)
+let l = ref 0;;
+(* --- *)
+incr l; incr l; !l;;
+(* --- *)
+fun x -> x;;
+(* --- *)
+List.map;;

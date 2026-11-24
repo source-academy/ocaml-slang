@@ -1,0 +1,5 @@
+let a = 1;; failwith "stop";; let b = 2;;
+(* --- *)
+a;;
+(* --- *)
+b;;

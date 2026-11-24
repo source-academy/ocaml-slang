@@ -1,0 +1,9 @@
+--- chunk 1
+out: val a : int = 1
+    val b : int = 2
+    val c : int = 3
+    - : int = 30
+--- chunk 2
+out: type t = X | Y
+    val v : t list = [X; Y]
+    - : int = 2

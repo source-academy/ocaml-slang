@@ -1,0 +1,3 @@
+out: Line 1, characters 26-27:
+    Warning 11 [redundant-case]: this match case is unused.
+out: 1

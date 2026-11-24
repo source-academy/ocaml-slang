@@ -1,0 +1,12 @@
+out: [42] [   42] [42   ] [00042] [+42]
+out: [ff] [FF] [10] [z] [str] ["q\"uote"]
+out: [3.141590] [3.14] [   3.142] [3.141590e+04] [0.0001]
+out: [true] [%] [     right] [left      ]|
+out: 1-two-3.0
+out: 7 false
+out: 3 items
+out: no newline here
+out: 
+out: to stderr
+out: 5 2.5
+out: "007"

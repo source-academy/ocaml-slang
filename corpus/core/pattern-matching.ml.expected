@@ -1,0 +1,10 @@
+out: empty
+out: one 7
+out: starts with a pair
+out: starts with 1 or 2
+out: 3 elements, 2 after the first
+out: origin
+out: axis
+out: axis
+out: plane
+out: ["positive"; "non-positive"; "nothing"]

@@ -1,0 +1,11 @@
+module M = struct let secret = 7 type t = A | B end;;
+(* --- *)
+M.secret;;
+(* --- *)
+module type S = sig val x : int end;;
+(* --- *)
+module N : S = struct let x = 1 let hidden = 2 end;;
+(* --- *)
+N.x;;
+(* --- *)
+N.hidden;;

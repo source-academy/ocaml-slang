@@ -1,0 +1,2 @@
+out: first assertion held
+error: Exception: Assert_failure ("//toplevel//", 3, 9).

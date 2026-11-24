@@ -1,0 +1,15 @@
+--- chunk 1
+--- chunk 2
+out: val f : 'a option -> 'a = <fun>
+--- chunk 3
+--- chunk 4
+out: Line 1, characters 8-28:
+    Warning 8 [partial-match]: this pattern-matching is not exhaustive.
+      Here is an example of a case that is not matched: None
+out: val g : 'a option -> 'a = <fun>
+--- chunk 5
+--- chunk 6
+out: - : int list list list list = [[[...]]]
+--- chunk 7
+--- chunk 8
+out: val cyc : 'a list as 'a = []

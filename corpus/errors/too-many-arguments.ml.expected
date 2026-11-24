@@ -1,0 +1,4 @@
+error 2:8-2:13: Error: The function f has type int -> int
+           It is applied to too many arguments
+    Line 2, characters 12-13:
+      This extra argument is not expected.

@@ -1,0 +1,12 @@
+--- chunk 1
+out: side effect
+out: - : unit = ()
+--- chunk 2
+out: partial
+--- chunk 3
+out: a
+out: b
+out: - : int = 42
+--- chunk 4
+out: called
+out: - : int = 1

@@ -1,0 +1,23 @@
+let x = 5;;
+(* --- *)
+x * 2;;
+(* --- *)
+let f y = x + y;;
+(* --- *)
+f 10;;
+(* --- *)
+let x = 100;;
+(* --- *)
+f 10;;
+(* --- *)
+type colour = Red | Green | Blue;;
+(* --- *)
+[Red; Blue];;
+(* --- *)
+let rec fact n = if n = 0 then 1 else n * fact (n - 1);;
+(* --- *)
+fact 6;;
+(* --- *)
+"a string";;
+(* --- *)
+(1, 2.5, 'c', "s", [|1; 2|], Some None);;

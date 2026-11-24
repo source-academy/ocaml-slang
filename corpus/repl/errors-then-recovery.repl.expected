@@ -1,0 +1,14 @@
+--- chunk 1
+error 1:0-1:14: Error: Unbound value undefined_name
+--- chunk 2
+error 1:4-1:7: Error: This constant has type string but an expression was expected of type
+             int
+--- chunk 3
+out: val loop : int -> int = <fun>
+    - : int = 0
+--- chunk 4
+out: - : exn = Not_found
+--- chunk 5
+error: Exception: Not_found.
+--- chunk 6
+out: - : string = "still works"

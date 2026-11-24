@@ -1,0 +1,7 @@
+out: ok 5
+out: error division by zero
+out: ok 10
+out: 2
+out: 0 7
+out: true
+out: Ok 3

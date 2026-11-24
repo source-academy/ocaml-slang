@@ -1,0 +1,3 @@
+let a = 1;; let b = a + 1;; let c = a + b;; c * 10;;
+(* --- *)
+type t = X | Y;; let v = [X; Y];; List.length v;;

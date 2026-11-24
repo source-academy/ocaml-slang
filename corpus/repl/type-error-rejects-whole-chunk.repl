@@ -1,0 +1,7 @@
+let a = 1;;
+(* --- *)
+print_endline "not printed";; let b = 2;; let c : int = "x";;
+(* --- *)
+b;;
+(* --- *)
+a;;

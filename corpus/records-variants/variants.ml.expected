@@ -1,0 +1,7 @@
+out: 3.14
+    6.00
+    16.00
+    1.00
+out: 1 2 3 5 8 9
+out: depth 3
+out: Node (Leaf, 1, Node (Leaf, 2, Leaf))
