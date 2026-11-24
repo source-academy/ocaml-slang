@@ -29,7 +29,7 @@ function nodeFs(): NodeFs | undefined {
   return nodeRequire()?.("fs") as NodeFs | undefined;
 }
 
-async function fetchScript(source: string): Promise<string> {
+export async function fetchScript(source: string): Promise<string> {
   if (!/^https?:\/\//.test(source)) {
     const fs = nodeFs();
     if (!fs) throw new Error(`${source}: not a URL, and there is no file system`);
@@ -46,7 +46,7 @@ async function fetchScript(source: string): Promise<string> {
  * origin, which `importScripts` could load too, but a blob needs no CORS and no second request). Where
  * there is no `importScripts` (Node), it runs as a function in the global scope, given Node's `require`.
  */
-function runScript(script: string): void {
+export function runScript(script: string): void {
   const scope = globalThis as { importScripts?: (url: string) => void };
   if (typeof scope.importScripts === "function" && typeof URL.createObjectURL === "function") {
     const url = URL.createObjectURL(new Blob([script], { type: "text/javascript" }));
@@ -58,6 +58,14 @@ function runScript(script: string): void {
   } else {
     new Function("require", script)(nodeRequire());
   }
+}
+
+/**
+ * Where a file that is published next to the toplevel is: `menhir.js` and `ocamllex.js`, which run on
+ * the `.mly` and `.mll` files of a program.
+ */
+export function siblingUrl(name: string, toplevel: string = configuredUrl()): string {
+  return toplevel.replace(/[^/\\]*$/, name);
 }
 
 /** Fetches the toplevel bundle and starts it; one that is already loaded is used as it is. */

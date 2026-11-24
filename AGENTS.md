@@ -8,6 +8,7 @@ OCaml for Source Academy: a conductor evaluator that runs the real OCaml topleve
 * `ocaml/toplevel/`: the OCaml toplevel (compiler-libs, Stdlib, MenhirLib), compiled to one JavaScript
   file with js_of_ocaml (`dune`).
 * `src/conductor/`: the TypeScript conductor evaluator `OCamlEvaluator`.
+* `tools/`: what is linked into menhir and ocamllex when they are built to JavaScript.
 * `src/tests/`: Jest tests, which run the built toplevel in Node. `src/tests/corpus.test.ts` runs the
   programs of `corpus/` and compares what the evaluator sends with their `.expected` files (see
   `corpus/README.md`; `UPDATE_CORPUS=1 yarn test corpus` rewrites them, and
@@ -19,8 +20,10 @@ OCaml for Source Academy: a conductor evaluator that runs the real OCaml topleve
 
 Use the scripts in `package.json`, not the tools directly.
 
-* Build everything: `yarn build`. Only the OCaml toplevel: `yarn build:ocaml`. Only the evaluator: `yarn build:evaluator`.
-* Test: `yarn test` (Jest; needs `dist/ocaml-toplevel.js`, so run `yarn build:ocaml` first).
+* Build everything: `yarn build`. Only the OCaml toplevel: `yarn build:ocaml`. Menhir and ocamllex as
+  JavaScript (`dist/menhir.js`, `dist/ocamllex.js`, from fetched sources in `.tools/`): `yarn build:tools`.
+  Only the evaluator: `yarn build:evaluator`.
+* Test: `yarn test` (Jest; needs `dist/ocaml-toplevel.js`, `dist/menhir.js` and `dist/ocamllex.js`, so run `yarn build` first).
 * Lint and types: `yarn lint`, `yarn typecheck`. Format: `yarn format` (`yarn format:ci` lists unformatted files).
 * After changing `dune-project`: `dune build @install --auto-promote` regenerates `ocaml-slang.opam`.
 
@@ -28,7 +31,8 @@ Use the scripts in `package.json`, not the tools directly.
 
 The evaluator fetches `ocaml-toplevel.js` when it starts (`src/conductor/loader.ts`): from
 `TOPLEVEL_URL` on GitHub Pages, or from `globalThis.OCAML_SLANG_TOPLEVEL_URL` (under Node also a file
-path, which the tests use). In a worker it runs the script from a `blob:` URL with `importScripts`;
+path, which the tests use). `menhir.js` and `ocamllex.js` are fetched from the same directory when a
+program has a `.mly` or `.mll`. In a worker it runs the script from a `blob:` URL with `importScripts`;
 under Node as a function given Node's `require`. A failed load is an error of that run, and the next run tries again.
 
 ## OCaml environment

@@ -12,12 +12,13 @@
   "scripts": {
     "build:ocaml": "bash scripts/build-ocaml.sh",
     "build:evaluator": "rollup -c rollup.config.mjs",
-    "build": "yarn build:ocaml && yarn build:evaluator",
+    "build": "yarn build:ocaml && yarn build:tools && yarn build:evaluator",
     "test": "jest",
     "lint": "eslint --concurrency=auto src",
     "typecheck": "tsc --noEmit -p tsconfig.test.json && tsc --noEmit",
     "format": "prettier --write \"**/*.{ts,json,js,mjs,cjs,yml}\"",
-    "format:ci": "prettier --list-different \"**/*.{ts,json,js,mjs,cjs,yml}\""
+    "format:ci": "prettier --list-different \"**/*.{ts,json,js,mjs,cjs,yml}\"",
+    "build:tools": "bash scripts/build-tools.sh"
   },
   "dependencies": {
     "@sourceacademy/conductor": "^0.8.3"

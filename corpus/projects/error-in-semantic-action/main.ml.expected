@@ -1,0 +1,2 @@
+error: File "parser.mly", line 5, characters 20-21:
+    Error: The value n has type int but an expression was expected of type string

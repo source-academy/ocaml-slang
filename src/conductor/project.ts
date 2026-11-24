@@ -1,9 +1,12 @@
+import type { Generation } from "./tools";
 import type { Toplevel, ToplevelError } from "./toplevel";
 
 /** A module of a program of several files: `lexer.ml`, and `lexer.mli` if there is one. */
 export interface ProjectModule {
   /** `Lexer`. */
   name: string;
+  /** The file it comes from, if that is not `mlFile`: `parser.mly` for the `parser.ml` that Menhir made. */
+  sourceFile?: string;
   /** Names to show in messages: the file names, without the directory. */
   mlFile: string;
   ml: string;
@@ -20,6 +23,8 @@ export type Project =
       modules: ProjectModule[];
       /** The text of each file by the name that messages show. */
       sources: Record<string, string>;
+      /** What the tools said although they succeeded (warnings about conflicts), by file. */
+      notes: { file: string; text: string }[];
     }
   | { failure: ProjectFailure; sources: Record<string, string> };
 
@@ -47,12 +52,17 @@ export async function discoverProject(
   requestFile: (path: string) => Promise<string | undefined>,
   entryPath: string,
   entrySource: string,
+  tools?: {
+    generateLexer(file: string, source: string): Promise<Generation>;
+    generateParser(file: string, source: string): Promise<Generation>;
+  },
 ): Promise<Project> {
   const dir = directory(entryPath);
   const entryName = moduleOfFile(entryPath);
   const sources: Record<string, string> = {};
   const found = new Map<string, ProjectModule & { deps: string[] }>();
   const missing = new Set<string>();
+  const notes: { file: string; text: string }[] = [];
 
   // The entry is not a module of the program: it runs last, and nothing can refer to it. A reference
   // to a module of its name, from it or from another file, is to the Stdlib's (a file of the program
@@ -82,14 +92,57 @@ export async function discoverProject(
     const looked = await Promise.all(
       names.map(async name => {
         const candidates = [uncapitalize(name), name];
-        const [ml, mli] = await Promise.all([
+        const [ml, mli, mll, mly] = await Promise.all([
           firstOf(candidates, "ml"),
           firstOf(candidates, "mli"),
+          firstOf(candidates, "mll"),
+          firstOf(candidates, "mly"),
         ]);
-        return { name, ml, mli };
+        return { name, ml, mli, mll, mly };
       }),
     );
-    for (const { name, ml, mli } of looked) {
+    for (const { name, ml: written, mli: written_mli, mll, mly } of looked) {
+      let ml = written;
+      let mli = written_mli;
+      let sourceFile: string | undefined;
+      const defining = [written, mll, mly].filter(f => f !== undefined);
+      if (defining.length > 1) {
+        return {
+          failure: {
+            message: `Error: ${defining.map(f => f.file).join(" and ")} both define the module ${name}`,
+          },
+          sources,
+        };
+      }
+      // A .mll is ocamllex's input, a .mly Menhir's: what they make is the module (and its interface).
+      const generator = mll
+        ? { source: mll, make: () => tools?.generateLexer(mll.file, mll.content) }
+        : mly
+          ? { source: mly, make: () => tools?.generateParser(mly.file, mly.content) }
+          : undefined;
+      if (generator) {
+        sources[generator.source.file] = generator.source.content;
+        const made = await generator.make();
+        if (!made) {
+          return {
+            failure: {
+              message: `Error: ${generator.source.file} needs a tool that is not available`,
+            },
+            sources,
+          };
+        }
+        if ("message" in made) {
+          return {
+            failure: { message: `Error in ${generator.source.file}:\n${made.message}` },
+            sources,
+          };
+        }
+        const base = generator.source.file.replace(/\.ml[ly]$/, "");
+        ml = { file: `${base}.ml`, content: made.ml };
+        if (made.mli !== undefined) mli = { file: `${base}.mli`, content: made.mli };
+        sourceFile = generator.source.file;
+        if (made.notes) notes.push({ file: generator.source.file, text: made.notes });
+      }
       if (!ml && !mli) {
         missing.add(name);
         continue;
@@ -104,6 +157,7 @@ export async function discoverProject(
       }
       const module: ProjectModule & { deps: string[] } = {
         name,
+        sourceFile,
         mlFile: ml!.file,
         ml: ml!.content,
         mliFile: mli?.file,
@@ -131,7 +185,9 @@ export async function discoverProject(
   const state = new Map<string, "visiting" | "done">();
   const path: string[] = [];
   const fileOf = (name: string) =>
-    name === entryName ? basename(entryPath) : found.get(name)!.mlFile;
+    name === entryName
+      ? basename(entryPath)
+      : (found.get(name)!.sourceFile ?? found.get(name)!.mlFile);
   let cycle: string[] | undefined;
   const visit = (name: string): void => {
     if (cycle) return;
@@ -156,5 +212,5 @@ export async function discoverProject(
       sources,
     };
   }
-  return { modules: order, sources };
+  return { modules: order, sources, notes };
 }

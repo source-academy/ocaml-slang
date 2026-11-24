@@ -1,0 +1,15 @@
+(* A language front end generated with ocamllex and Menhir (--table), and an interpreter. *)
+let sample = {|
+// factorial of 10, and the first Fibonacci numbers
+n = 10; acc = 1;
+while (0 < n) { acc = acc * n; n = n - 1; }
+print acc;
+a = 0; b = 1; i = 0;
+while (i < 10) { print a; t = a + b; a = b; b = t; i = i + 1; }
+if (acc == 3628800 && !false) { print true; } else { print false; }
+print -2 * 3 + 4;
+|}
+let () = Interp.run sample
+let () = try Interp.run "x = 1 +;" with Failure m -> print_endline m
+let () = try Interp.run "x = 1 $ 2;" with Lexer.Error m -> print_endline ("lexical error: " ^ m)
+let () = try Interp.run "print y;" with Failure m -> print_endline m

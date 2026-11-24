@@ -27,6 +27,8 @@ jobs:
       - run: yarn install --immutable
       - name: Build the OCaml toplevel
         run: opam exec -- yarn build:ocaml
+      - name: Build Menhir and ocamllex as JavaScript
+        run: opam exec -- yarn build:tools
       - run: yarn build:evaluator
       - run: yarn typecheck
       - run: yarn lint

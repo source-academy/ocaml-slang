@@ -171,8 +171,22 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
 
 ### Phase 3: Menhir and ocamllex (about 2 weeks)
 
-* `.mll` and `.mly` files in a program are run through ocamllex and Menhir (`--table`) before
+* `.mll` and `.mly` files in a program are run through ocamllex (`-ml`) and Menhir (`--table`) before
   compilation, on the worker's in-memory file system. The generated modules are compiled with the rest.
+  A module `Foo` may be `foo.ml`, `foo.mll` or `foo.mly` (two of them are an error); a `.mly` also
+  gives the interface `foo.mli`, which has the tokens. Discovery (phase 2) finds them by the same
+  requests. The generated code's line directives (`# 5 "parser.mly"`) make OCaml's errors in semantic
+  actions point at the `.mly`, with line and column.
+* The two tools are built to JavaScript from their sources (`scripts/build-tools.sh`; the sources are
+  fetched with `opam source` and not copied here: Menhir is GPL-2.0, its library MenhirLib has a
+  linking exception, ocamllex is LGPL-2.1) and published next to the toplevel as `menhir.js` (1 MB,
+  0.2 MB brotli) and `ocamllex.js` (0.2 MB). The evaluator fetches one when a program first needs it, and
+  runs it in the same worker or Node process, once per generation: each js_of_ocaml program installs
+  its runtime in globals, which are saved and put back so that the toplevel's survive. A small stub
+  linked into the tools (`tools/jsoo-host.js`) hands what a tool writes to stdout and stderr, and the
+  files it made, to the evaluator. What is generated is kept by the text of its source, so only a
+  changed file is generated again. What a tool says although it succeeded (Menhir's warnings about
+  conflicts) is sent as output; its failure is an error with its message.
 * Menhir's errors and conflict warnings are reported with file, line, and column. The `.conflicts`
   report (`--explain`) is shown to the student.
 * The generated `.ml` files can be viewed, since students should be able to read what Menhir

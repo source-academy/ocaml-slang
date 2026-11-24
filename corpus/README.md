@@ -10,6 +10,7 @@ upgrade of OCaml, js_of_ocaml, Menhir or the toplevel code: `yarn test corpus` r
   (1-based lines, 0-based columns in editor characters), `--- chunk N` between the chunks of a session.
 * `projects/case/` is a program of several files, served as the folder `/project`; each `entry.ml.expected`
   is for running `entry.ml` as the file open in the editor (`main.ml` if there is none).
+  A project may have `.mll` and `.mly` files, which the evaluator runs through ocamllex and Menhir.
 * The groups: `core`, `records-variants`, `exceptions`, `modules`, `printf`, `errors` (syntax, type and
   other errors, warnings, columns after non-ASCII text), `repl`, `misc` (int width, MenhirLib, a hand-written
   lexer and parser, ...).

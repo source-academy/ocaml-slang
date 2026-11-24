@@ -56,19 +56,67 @@ for path in sorted(glob.glob(f"{root}/**/*.ml", recursive=True)):
 
 # Programs of several files: compiled and run natively, from the files that the entry refers to
 # (the closure that `ocamldep` finds), in the order `ocamldep -sort` gives.
+def modules_of(f):
+    out = subprocess.run(["ocamldep", "-modules", f], capture_output=True, text=True)
+    if ":" not in out.stdout:
+        raise SystemExit(f"ocamldep failed on {f}: {out.stderr[:300]}")
+    return out.stdout.split(":", 1)[1].split()
+
+
 for expected_path in sorted(glob.glob(f"{root}/projects/*/*.ml.expected")):
     entry = expected_path[: -len(".expected")]
     directory = os.path.dirname(entry)
     expected = open(expected_path).read()
     if re.search(r"^error", expected, re.M):
         continue
-    names = {os.path.basename(f)[0].upper() + os.path.basename(f)[1:].split(".")[0]: f for f in glob.glob(f"{directory}/*.ml")}
-    def modules_of(f):
-        out = subprocess.run(["ocamldep", "-modules", f], capture_output=True, text=True)
-        if ":" not in out.stdout:
-            raise SystemExit(f"ocamldep failed on {f}: {out.stderr[:300]}")
-        return out.stdout.split(":", 1)[1].split()
+    generated = glob.glob(f"{directory}/*.mll") + glob.glob(f"{directory}/*.mly")
+    if generated:
+        # Lexers and parsers: made natively with ocamllex and Menhir (--table), then compiled with MenhirLib,
+        # in a copy that holds only the files that the entry refers to (the evaluator reads no others). This
+        # checks the tools that run in the browser against the native ones.
+        with tempfile.TemporaryDirectory() as tmp:
+            tool_stderr = ""  # what the tools say, as the evaluator sends it as output
+            entry_name = os.path.basename(entry)
+            shutil.copy(entry, tmp)
+            by_module = {}
+            for f in glob.glob(f"{directory}/*"):
+                base = os.path.basename(f)
+                if "." in base and not base.endswith(".expected"):
+                    by_module.setdefault(base.split(".")[0][0].upper() + base.split(".")[0][1:], []).append(f)
+            done, todo = set(), [entry_name]
+            while todo:
+                current = todo.pop()
+                deps = set()
+                for f in sorted(glob.glob(f"{tmp}/{current.split('.')[0]}.ml*")) if current != entry_name else [f"{tmp}/{entry_name}"]:
+                    if f.endswith((".ml", ".mli")):
+                        deps |= set(modules_of(f))
+                for module in deps:
+                    for f in by_module.get(module, []):
+                        stem = os.path.basename(f)
+                        if stem in done:
+                            continue
+                        done.add(stem)
+                        shutil.copy(f, tmp)
+                        if f.endswith(".mll"):
+                            tool_stderr += subprocess.run(["ocamllex", "-ml", "-q", f"{tmp}/{stem}"], check=True, capture_output=True, text=True).stderr
+                        if f.endswith(".mly"):
+                            tool_stderr += subprocess.run(["menhir", "--table", stem], check=True, capture_output=True, text=True, cwd=tmp).stderr
+                        todo.append(stem)
+            sources = [os.path.basename(f) for f in glob.glob(f"{tmp}/*.ml") + glob.glob(f"{tmp}/*.mli")]
+            order = subprocess.run(["ocamldep", "-sort"] + [f for f in sources if f != entry_name], capture_output=True, text=True, cwd=tmp).stdout.split()
+            exe = os.path.join(tmp, "program")
+            build = subprocess.run(
+                ["ocamlfind", "ocamlopt", "-package", "menhirLib", "-linkpkg", "-w", "-a", "-o", exe] + order + [entry_name],
+                capture_output=True, text=True, cwd=tmp)
+            if build.returncode != 0:
+                different += 1
+                print("DOES NOT COMPILE", entry, build.stderr[:300])
+                continue
+            run = subprocess.run([exe], capture_output=True, text=True)
+            compare(entry, expected, run.stdout, run.stderr + build.stderr + tool_stderr)
+        continue
 
+    names = {os.path.basename(f)[0].upper() + os.path.basename(f)[1:].split(".")[0]: f for f in glob.glob(f"{directory}/*.ml")}
     needed, todo = set(), [entry]
     while todo:
         f = todo.pop()
