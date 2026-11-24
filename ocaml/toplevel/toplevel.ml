@@ -78,22 +78,28 @@ let error_of_exn exn =
    is run. Type checking has no effect on the session, except for warnings, which are silenced
    here and reported by the run. A directive (#use, #mod_use, #load) changes the environment in
    ways that only running it shows, so the check stops at the first one: the phrases after it are
-   checked when they run. *)
+   checked just before each runs. *)
 let silent = Format.make_formatter (fun _ _ _ -> ()) (fun () -> ())
 
-let check phrases =
+let without_warnings f =
   let saved = !Location.formatter_for_warnings in
   Location.formatter_for_warnings := silent;
-  Fun.protect
-    ~finally:(fun () -> Location.formatter_for_warnings := saved)
-    (fun () ->
-      let rec go env = function
-        | Parsetree.Ptop_def sstr :: rest ->
-            let _, _, env = Topcommon.typecheck_phrase silent env sstr in
-            go env rest
-        | Parsetree.Ptop_dir _ :: _ | [] -> ()
+  Fun.protect ~finally:(fun () -> Location.formatter_for_warnings := saved) f
+
+let typecheck env = function
+  | Parsetree.Ptop_def sstr ->
+      let _, _, env = Topcommon.typecheck_phrase silent env sstr in
+      env
+  | Parsetree.Ptop_dir _ -> env
+
+(* Checks the phrases up to the first directive; returns how many it checked. *)
+let check phrases =
+  without_warnings (fun () ->
+      let rec go n env = function
+        | (Parsetree.Ptop_def _ as ph) :: rest -> go (n + 1) (typecheck env ph) rest
+        | Parsetree.Ptop_dir _ :: _ | [] -> n
       in
-      go !Toploop.toplevel_env phrases)
+      go 0 !Toploop.toplevel_env phrases)
 
 exception Failed
 
@@ -119,9 +125,11 @@ let run code on_output =
         let lexbuf = Lexing.from_string code in
         Location.init lexbuf "//toplevel//";
         let phrases = !Toploop.parse_use_file lexbuf in
-        check phrases;
-        List.iter
-          (fun ph ->
+        let checked = check phrases in
+        List.iteri
+          (fun i ph ->
+            (* After a directive, a phrase is checked just before it runs, for the same errors. *)
+            if i >= checked then ignore (without_warnings (fun () -> typecheck !Toploop.toplevel_env ph));
             last := None;
             Buffer.clear errbuf;
             let ok = Toploop.execute_phrase true ppf ph in

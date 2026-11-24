@@ -140,6 +140,18 @@ describe("sessions and chunks", () => {
     expect(errors.map(e => e.message).join("\n")).toContain("occurs inside");
   });
 
+  test("a type error after a directive has a location too", async () => {
+    g.ocaml!.writeFile("/static/defs2.ml", "let from_defs2 = 1;;");
+    const { conductor, errors } = fakeConductor();
+    await new OCamlEvaluator(conductor).evaluateChunk(
+      '#use "/static/defs2.ml";;\nlet y : int = "s";;',
+    );
+    const e = errors[0] as ConductorError & { line?: number; column?: number };
+    expect(e.line).toBe(2);
+    expect(e.column).toBe(14);
+    expect(e.message).toMatch(/^Error: This constant has type string/);
+  });
+
   test("a new session still has MenhirLib and the Stdlib", async () => {
     const { conductor, outputs, errors } = fakeConductor();
     const ev = new OCamlEvaluator(conductor);
