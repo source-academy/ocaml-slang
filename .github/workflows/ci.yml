@@ -30,6 +30,7 @@ jobs:
       - name: Build Menhir and ocamllex as JavaScript
         run: opam exec -- yarn build:tools
       - run: yarn build:evaluator
+      - run: yarn build:docs
       - run: yarn typecheck
       - run: yarn lint
       - run: yarn format:ci
