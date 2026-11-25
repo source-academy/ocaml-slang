@@ -20,7 +20,7 @@ function configuredUrl(): string {
 type NodeRequire = (id: string) => unknown;
 type NodeFs = { promises: { readFile(path: string, encoding: "utf8"): Promise<string> } };
 
-/** Node's `require`, which the evaluator's script does not have as a global (and the toplevel's runtime wants). */
+/** Node's `require`, which the evaluator's script does not have as a global: the loader's own, to read the toplevel from a file. The toplevel is not given it (see {@link runInNode}). */
 function nodeRequire(): NodeRequire | undefined {
   const proc = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process;
   if (proc?.getBuiltinModule)
@@ -48,7 +48,7 @@ export async function fetchScript(source: string): Promise<string> {
  * Runs the script in the global scope, where the toplevel puts `globalThis.ocaml`. In a worker it is
  * started from a `blob:` URL, as the frontend starts the evaluator itself (the script is on another
  * origin, which `importScripts` could load too, but a blob needs no CORS and no second request). Where
- * there is no `importScripts` (Node), it runs as a function in the global scope, given Node's `require`.
+ * there is no `importScripts` (Node), it runs as a function in the global scope, as in a browser (see {@link runInNode}).
  */
 export function runScript(script: string): void {
   const scope = globalThis as { importScripts?: (url: string) => void };
@@ -60,7 +60,28 @@ export function runScript(script: string): void {
       URL.revokeObjectURL(url);
     }
   } else {
-    new Function("require", script)(nodeRequire());
+    runInNode(script);
+  }
+}
+
+/**
+ * Under Node (the tests, the grader's host) js_of_ocaml's runtime takes Node for the machine: it uses
+ * the real file system, runs `Sys.command` as a shell command, and reads the environment. A program
+ * that a student wrote would then read and write the grader's files and run commands on it. So the
+ * script is started as it is in a browser: without `require`, and with `process` hidden while it loads
+ * (the runtime decides then which file system to use), so that the only file system is the in-memory
+ * one and `Sys.command` fails (exit code 127). `process` is back when it has loaded; the environment
+ * a program can read is that of the worker, which is for the host to limit.
+ */
+function runInNode(script: string): void {
+  const scope = globalThis as { process?: unknown };
+  const descriptor = Object.getOwnPropertyDescriptor(scope, "process");
+  Object.defineProperty(scope, "process", { value: undefined, configurable: true, writable: true });
+  try {
+    new Function("require", script)(undefined);
+  } finally {
+    if (descriptor) Object.defineProperty(scope, "process", descriptor);
+    else delete scope.process;
   }
 }
 

@@ -37,7 +37,10 @@ The evaluator fetches `ocaml-toplevel.js` when it starts (`src/conductor/loader.
 `TOPLEVEL_URL` on GitHub Pages, or from `globalThis.OCAML_SLANG_TOPLEVEL_URL` (under Node also a file
 path, which the tests use). `menhir.js` and `ocamllex.js` are fetched from the same directory when a
 program has a `.mly` or `.mll`. In a worker it runs the script from a `blob:` URL with `importScripts`;
-under Node as a function given Node's `require`. A failed load is an error of that run, and the next run tries again.
+under Node as a function with no `require` and with `process` hidden while it loads, as in a browser (`runInNode`):
+js_of_ocaml's runtime would otherwise use the real file system and shell, which a student's program must not reach
+(the grader runs programs under Node). Do not give the toplevel `require` or `process` again; `src/tests/testcases.test.ts`
+checks that `Sys.command` runs nothing and that real files are out of reach. A failed load is an error of that run, and the next run tries again.
 
 ## OCaml environment
 
