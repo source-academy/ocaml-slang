@@ -1,5 +1,5 @@
 out: first
-    second
+out: second
 out: a b c
 out: 1 and two
 out: <1|2> <3|4>

@@ -3,8 +3,9 @@ import { Conduit, type ILink } from "@sourceacademy/conductor/conduit";
 import { BasicHostPlugin } from "@sourceacademy/conductor/host";
 import { RunnerStatus } from "@sourceacademy/conductor/types";
 import type { IRunnerPlugin } from "@sourceacademy/conductor/runner";
-import { existsSync } from "fs";
-import { resolve } from "path";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join, resolve } from "path";
 import { Worker } from "worker_threads";
 import { OCamlEvaluator } from "../conductor/OCamlEvaluator";
 
@@ -122,6 +123,44 @@ describe("the evaluator's toplevel runs in a Node worker thread, as in the grade
   test("an endless loop is stopped by terminating the thread", async () => {
     const r = await run("let rec loop () = loop ();; loop ();;", 1500);
     expect(r.timedOut).toBe(true);
+  });
+});
+
+describe("a program cannot reach the machine that the toplevel runs on under Node", () => {
+  // The grader runs students' programs under Node. js_of_ocaml's runtime would use the real file
+  // system and shell there, unless the loader starts it as a browser does (loader.ts, runInNode).
+  const dir = mkdtempSync(join(tmpdir(), "ocaml-slang-sandbox-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  test("Sys.command runs nothing", async () => {
+    const marker = join(dir, "from-sys-command");
+    const r = await grade(`;; Sys.command "touch ${marker}"`);
+    expect(r.last).toBe("127");
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  test("a file outside the program's own file system cannot be read", async () => {
+    const secret = join(dir, "secret.txt");
+    writeFileSync(secret, "hunter2");
+    const r = await grade(`;; In_channel.with_open_text "${secret}" In_channel.input_all`);
+    expect(r.errors).toHaveLength(1);
+    expect(r.outputs.join("")).not.toContain("hunter2");
+  });
+
+  test("a file that the program writes is in memory, not on the machine", async () => {
+    const written = join(dir, "written.txt");
+    const r = await grade(
+      `let () = Out_channel.with_open_text "${written}" (fun oc -> output_string oc "x")\n;; 1`,
+    );
+    expect(r.errors).toEqual([]);
+    expect(existsSync(written)).toBe(false);
+  });
+
+  test("the program's own files still work, and so does the next program", async () => {
+    const r = await grade(
+      `let () = Out_channel.with_open_text "/note.txt" (fun oc -> output_string oc "ok")\n;; In_channel.with_open_text "/note.txt" In_channel.input_all`,
+    );
+    expect(r.last).toBe('"ok"');
   });
 });
 
