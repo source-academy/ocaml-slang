@@ -5,7 +5,10 @@ import ocamlHighlightRules from "./highlight-rules";
 export default function ocamlMode(): SyntaxHighlightData {
   return {
     highlightRules: ocamlHighlightRules(),
-    // folds the brackets, braces and parentheses that a line opens
+    // OCaml has no folding for now. Ace has no OCaml folding mode, and `cstyle` is defined only in
+    // the files of other languages' modes (JavaScript, C++), which the frontend loads only for a
+    // language that hooks into them. The frontend then builds the mode without folding. The
+    // protocol requires the field, so this names the nearest fit.
     foldingRules: { hookFrom: "ace/mode/folding/cstyle", args: [] },
     // OCaml has no line comments
     lineCommentStart: "",
