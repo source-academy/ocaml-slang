@@ -15,29 +15,43 @@ export function editorColumn(source: string, line: number, byteColumn: number): 
   return new TextDecoder().decode(bytes.subarray(0, end)).length;
 }
 
+const segmenter =
+  typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
+    : undefined;
+
+/** The grapheme clusters of `text`; the code points, if the browser has no `Intl.Segmenter`. */
+function clusters(text: string): string[] {
+  return segmenter ? Array.from(segmenter.segment(text), s => s.segment) : Array.from(text);
+}
+
+/** The cells of a monospace font that one grapheme cluster takes: that of its first character. */
+function clusterWidth(cluster: string): number {
+  const c = cluster.codePointAt(0) as number;
+  if (/\p{M}/u.test(cluster[0] ?? "") || c === 0x200d) return 0;
+  const wide =
+    (c >= 0x1100 && c <= 0x115f) ||
+    (c >= 0x2e80 && c <= 0xa4cf) ||
+    (c >= 0xac00 && c <= 0xd7a3) ||
+    (c >= 0xf900 && c <= 0xfaff) ||
+    (c >= 0xfe30 && c <= 0xfe6f) ||
+    (c >= 0xff00 && c <= 0xff60) ||
+    (c >= 0xffe0 && c <= 0xffe6) ||
+    (c >= 0x1f1e6 && c <= 0x1f1ff) ||
+    (c >= 0x1f300 && c <= 0x1f64f) ||
+    (c >= 0x1f900 && c <= 0x1f9ff) ||
+    (c >= 0x20000 && c <= 0x3fffd);
+  return wide ? 2 : 1;
+}
+
 /**
- * How many cells of a monospace font `text` takes: 0 for a combining mark or a joiner, 2 for a
- * full-width or wide character (CJK, emoji), 1 for the rest. An approximation, which is right for
- * the fonts of the editor and the REPL; it keeps the `^` under the span of an error.
+ * How many cells of a monospace font `text` takes, by grapheme cluster: a letter with combining marks
+ * is one cell, a CJK character, an emoji (also a joined one, or a flag) is two. An approximation,
+ * which is right for the fonts of the editor and the REPL; it keeps the `^` under the span of an error.
  */
 export function displayWidth(text: string): number {
   let width = 0;
-  for (const ch of text) {
-    const c = ch.codePointAt(0) as number;
-    if (/\p{M}/u.test(ch) || c === 0x200d) continue;
-    const wide =
-      (c >= 0x1100 && c <= 0x115f) ||
-      (c >= 0x2e80 && c <= 0xa4cf) ||
-      (c >= 0xac00 && c <= 0xd7a3) ||
-      (c >= 0xf900 && c <= 0xfaff) ||
-      (c >= 0xfe30 && c <= 0xfe6f) ||
-      (c >= 0xff00 && c <= 0xff60) ||
-      (c >= 0xffe0 && c <= 0xffe6) ||
-      (c >= 0x1f300 && c <= 0x1f64f) ||
-      (c >= 0x1f900 && c <= 0x1f9ff) ||
-      (c >= 0x20000 && c <= 0x3fffd);
-    width += wide ? 2 : 1;
-  }
+  for (const cluster of clusters(text)) width += clusterWidth(cluster);
   return width;
 }
 
@@ -62,9 +76,9 @@ export function locationSnippet(
   const to = endLine > line ? text.length : endColumn;
   // Keep tabs in the margin, so that the marks line up whatever the width of a tab; every other
   // character is as many spaces as it is wide.
-  const margin = Array.from(text.slice(0, startColumn), ch =>
-    ch === "\t" ? "\t" : " ".repeat(displayWidth(ch)),
-  ).join("");
+  const margin = clusters(text.slice(0, startColumn))
+    .map(c => (c === "\t" ? "\t" : " ".repeat(clusterWidth(c))))
+    .join("");
   const marks = "^".repeat(Math.max(1, displayWidth(text.slice(startColumn, to))));
   return `${header}\n\n    ${text}\n    ${margin}${marks}`;
 }

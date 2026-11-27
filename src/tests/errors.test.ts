@@ -51,6 +51,12 @@ describe("an OCaml error says where it is in its message (#49)", () => {
     expect(displayWidth("e\u0301")).toBe(1);
     expect(displayWidth("\u4e2d\u6587")).toBe(4);
     expect(displayWidth("\u{1F600}")).toBe(2);
+    // a joined emoji (woman, joiner, laptop) and a flag are one glyph of two cells
+    expect(displayWidth("\u{1F469}\u200d\u{1F4BB}")).toBe(2);
+    expect(displayWidth("\u{1F1F8}\u{1F1EC}")).toBe(2);
+    expect(locationSnippet("\u{1F469}\u200d\u{1F4BB} x", 1, 6, 1, 7)).toBe(
+      "Error at line 1, characters 6-7:\n\n    \u{1F469}\u200d\u{1F4BB} x\n       ^",
+    );
     // two CJK characters are four cells; "e" with a combining mark is one
     expect(locationSnippet('"\u4e2d\u6587" x', 1, 5, 1, 6)).toBe(
       'Error at line 1, characters 5-6:\n\n    "\u4e2d\u6587" x\n           ^',
