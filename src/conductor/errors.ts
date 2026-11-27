@@ -16,8 +16,36 @@ export function editorColumn(source: string, line: number, byteColumn: number): 
 }
 
 /**
- * An error of OCaml's, for the frontend: `line` and `column` (1-based and 0-based, the column in
- * editor characters) are what it shows; `message` is OCaml's own, without the location.
+ * Where an error is, for a reader of the message alone: the header with the line, the source line,
+ * and a line of `^` under the span (as py-slang's errors do). A span over several lines is marked to
+ * the end of its first line. `startColumn` and `endColumn` are in editor characters.
+ */
+export function locationSnippet(
+  source: string,
+  line: number,
+  startColumn: number,
+  endLine: number,
+  endColumn: number,
+): string {
+  const text = source.split("\n")[line - 1] ?? "";
+  const header =
+    endLine > line
+      ? `Error at lines ${line}-${endLine}:`
+      : `Error at line ${line}, characters ${startColumn}-${endColumn}:`;
+  if (text === "") return header;
+  const to = endLine > line ? text.length : endColumn;
+  // Keep tabs in the margin, so that the marks line up whatever the width of a tab.
+  const margin = text.slice(0, startColumn).replace(/[^\t]/g, " ");
+  const marks = "^".repeat(Math.max(1, to - startColumn));
+  return `${header}\n\n    ${text}\n    ${margin}${marks}`;
+}
+
+/**
+ * An error of OCaml's, for the frontend. `line` and `column` (1-based and 0-based, the column in
+ * editor characters) are what it shows, and `rawMessage` is OCaml's own message without the location.
+ * Only `message` is certain to arrive: the conductor sends the error with `postMessage`, and the
+ * structured clone keeps the message of an `Error` and drops its other properties. So the message
+ * has the location in it, with the source line (`locationSnippet`).
  */
 export class OCamlError extends ConductorError {
   line?: number;
@@ -46,7 +74,12 @@ export class OCamlError extends ConductorError {
             : `lines ${error.line}-${error.endLine}`
         }, characters ${start}-${end}:\n${error.message}`
       : error.message;
-    super(message);
+    const located = !foreign && error.line > 0;
+    super(
+      located
+        ? `${locationSnippet(text, error.line, start, error.endLine, end)}\n\n${message}`
+        : message,
+    );
     this.name = "OCamlError";
     this.rawMessage = message;
     if (foreign) {

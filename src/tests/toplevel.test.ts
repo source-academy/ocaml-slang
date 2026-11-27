@@ -223,10 +223,14 @@ describe("sessions and chunks", () => {
     await new OCamlEvaluator(conductor).evaluateChunk(
       '#use "/static/defs2.ml";;\nlet y : int = "s";;',
     );
-    const e = errors[0] as ConductorError & { line?: number; column?: number };
+    const e = errors[0] as ConductorError & {
+      line?: number;
+      column?: number;
+      rawMessage: string;
+    };
     expect(e.line).toBe(2);
     expect(e.column).toBe(14);
-    expect(e.message).toMatch(/^Error: This constant has type string/);
+    expect(e.rawMessage).toMatch(/^Error: This constant has type string/);
   });
 
   test("a new session still has MenhirLib and the Stdlib", async () => {
@@ -246,7 +250,8 @@ describe("output, results and errors", () => {
   function setup() {
     const { conductor, outputs, errors } = fakeConductor();
     const ev = new OCamlEvaluator(conductor);
-    const err = () => errors[0] as ConductorError & { line?: number; column?: number };
+    const err = () =>
+      errors[0] as ConductorError & { line?: number; column?: number; rawMessage: string };
     return { ev, outputs, errors, err };
   }
 
@@ -293,7 +298,7 @@ describe("output, results and errors", () => {
     const { ev, outputs, err } = setup();
     await ev.evaluateChunk('let ok = 1;;\nlet x : int = "five";;');
     expect(outputs).toEqual([]);
-    expect(err().message).toBe(
+    expect(err().rawMessage).toBe(
       "Error: This constant has type string but an expression was expected of type\n         int",
     );
     expect(err().line).toBe(2);
@@ -303,9 +308,18 @@ describe("output, results and errors", () => {
   test("a syntax error has a line and column", async () => {
     const { ev, err } = setup();
     await ev.evaluateFile("main.ml", "let a = 1\nlet b = ;;");
-    expect(err().message).toBe("Error: Syntax error");
+    expect(err().rawMessage).toBe("Error: Syntax error");
     expect(err().line).toBe(2);
     expect(err().column).toBe(8);
+  });
+
+  test("a syntax error says where it is in its message, which is all that a clone keeps (#49)", async () => {
+    const { ev, err } = setup();
+    await ev.evaluateFile("main.ml", "let a = 1\nlet b = ;;");
+    const kept = structuredClone(err());
+    expect(kept.message).toBe(
+      "Error at line 2, characters 8-10:\n\n    let b = ;;\n            ^^\n\nError: Syntax error",
+    );
   });
 
   test("columns are editor characters, not OCaml's bytes", async () => {
