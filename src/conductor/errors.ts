@@ -16,6 +16,32 @@ export function editorColumn(source: string, line: number, byteColumn: number): 
 }
 
 /**
+ * How many cells of a monospace font `text` takes: 0 for a combining mark or a joiner, 2 for a
+ * full-width or wide character (CJK, emoji), 1 for the rest. An approximation, which is right for
+ * the fonts of the editor and the REPL; it keeps the `^` under the span of an error.
+ */
+export function displayWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    const c = ch.codePointAt(0) as number;
+    if (/\p{M}/u.test(ch) || c === 0x200d) continue;
+    const wide =
+      (c >= 0x1100 && c <= 0x115f) ||
+      (c >= 0x2e80 && c <= 0xa4cf) ||
+      (c >= 0xac00 && c <= 0xd7a3) ||
+      (c >= 0xf900 && c <= 0xfaff) ||
+      (c >= 0xfe30 && c <= 0xfe6f) ||
+      (c >= 0xff00 && c <= 0xff60) ||
+      (c >= 0xffe0 && c <= 0xffe6) ||
+      (c >= 0x1f300 && c <= 0x1f64f) ||
+      (c >= 0x1f900 && c <= 0x1f9ff) ||
+      (c >= 0x20000 && c <= 0x3fffd);
+    width += wide ? 2 : 1;
+  }
+  return width;
+}
+
+/**
  * Where an error is, for a reader of the message alone: the header with the line, the source line,
  * and a line of `^` under the span (as py-slang's errors do). A span over several lines is marked to
  * the end of its first line. `startColumn` and `endColumn` are in editor characters.
@@ -34,9 +60,12 @@ export function locationSnippet(
       : `Error at line ${line}, characters ${startColumn}-${endColumn}:`;
   if (text === "") return header;
   const to = endLine > line ? text.length : endColumn;
-  // Keep tabs in the margin, so that the marks line up whatever the width of a tab.
-  const margin = text.slice(0, startColumn).replace(/[^\t]/g, " ");
-  const marks = "^".repeat(Math.max(1, to - startColumn));
+  // Keep tabs in the margin, so that the marks line up whatever the width of a tab; every other
+  // character is as many spaces as it is wide.
+  const margin = Array.from(text.slice(0, startColumn), ch =>
+    ch === "\t" ? "\t" : " ".repeat(displayWidth(ch)),
+  ).join("");
+  const marks = "^".repeat(Math.max(1, displayWidth(text.slice(startColumn, to))));
   return `${header}\n\n    ${text}\n    ${margin}${marks}`;
 }
 

@@ -1,4 +1,4 @@
-import { locationSnippet, OCamlError } from "../conductor/errors";
+import { displayWidth, locationSnippet, OCamlError } from "../conductor/errors";
 
 const at = (
   line: number,
@@ -43,6 +43,25 @@ describe("an OCaml error says where it is in its message (#49)", () => {
       'Error at line 1, characters 13-14:\n\n    let s = "é" ;; )\n                 ^\n\nError: x',
     );
     expect(e.column).toBe(13);
+  });
+
+  test("the marks line up after wide characters and combining marks", () => {
+    expect(displayWidth("abc")).toBe(3);
+    expect(displayWidth("\u00e9")).toBe(1);
+    expect(displayWidth("e\u0301")).toBe(1);
+    expect(displayWidth("\u4e2d\u6587")).toBe(4);
+    expect(displayWidth("\u{1F600}")).toBe(2);
+    // two CJK characters are four cells; "e" with a combining mark is one
+    expect(locationSnippet('"\u4e2d\u6587" x', 1, 5, 1, 6)).toBe(
+      'Error at line 1, characters 5-6:\n\n    "\u4e2d\u6587" x\n           ^',
+    );
+    expect(locationSnippet("e\u0301 x", 1, 3, 1, 4)).toBe(
+      "Error at line 1, characters 3-4:\n\n    e\u0301 x\n      ^",
+    );
+    // a span over wide characters is as wide as they are
+    expect(locationSnippet("\u4e2d\u6587", 1, 0, 1, 2)).toBe(
+      "Error at line 1, characters 0-2:\n\n    \u4e2d\u6587\n    ^^^^",
+    );
   });
 
   test("the message of OCaml's own is kept as rawMessage, and an error in another file is not changed", () => {
