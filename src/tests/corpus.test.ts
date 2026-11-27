@@ -48,11 +48,17 @@ function recorder(folder: Record<string, string> = {}): Recorder {
     sendOutput: (text: string) => lines.push(`out: ${indent(text)}`),
     requestFile: (path: string) => Promise.resolve(folder[path]),
     sendError: (
-      e: ConductorError & { line?: number; column?: number; endLine?: number; endColumn?: number },
+      e: ConductorError & {
+        line?: number;
+        column?: number;
+        endLine?: number;
+        endColumn?: number;
+        rawMessage?: string;
+      },
     ) => {
       const where =
         e.line === undefined ? "" : ` ${e.line}:${e.column}-${e.endLine}:${e.endColumn}`;
-      lines.push(`error${where}: ${indent(e.message)}`);
+      lines.push(`error${where}: ${indent(e.rawMessage ?? e.message)}`);
     },
   } as unknown as IRunnerPlugin;
   return { conductor, lines };

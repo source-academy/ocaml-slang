@@ -142,6 +142,9 @@ teaching team are settled: see "Decided with the CS4212 teaching team".)
   and each flush of the program's output is a conductor output message, as in Python's evaluators, so
   a testcase that prints or evaluates its answer is read from the last output. Errors carry OCaml's
   message and its line and column (the column in editor characters, converted from OCaml's bytes).
+  The conductor sends an error with `postMessage`, and the structured clone keeps only the message of
+  an `Error`, so the message also says where the error is: `Error at line 2, characters 8-10:`, the
+  source line, and `^` under the span, as py-slang's errors do (ocaml-slang#49).
   `read_line` finds the end of the input: the conductor's input is asynchronous, which a toplevel
   that runs synchronously cannot wait for (see "Later").
 * Lazy loading from a `blob:` URL, and a Node host for the tests.
